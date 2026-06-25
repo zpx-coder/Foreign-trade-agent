@@ -40,6 +40,8 @@ async def health_check():
     return {"status": "ok", "version": "0.1.0"}
 
 
-# ── 路由注册（后续 Phase 逐步挂载） ──
-# from app.api import auth, enterprise, products, icps, customers, email_templates, email_campaigns, email_auth
-# app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
+# ── 路由注册 ──
+from app.api import auth
+
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
+# 注意：管理后台登录端点也在 auth.router 中，路径为 /api/v1/auth/admin/login

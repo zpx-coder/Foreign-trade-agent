@@ -2,17 +2,20 @@
 
 from app.database import Base
 
-# 模型文件在此导入后，Alembic 即可自动检测
-# from app.models.tenant import Tenant       # Phase 1
-# from app.models.user import User           # Phase 1
-# from app.models.enterprise import EnterpriseProfile  # Phase 2
-# from app.models.product import Product     # Phase 2
-# from app.models.icp import Icp             # Phase 3
-# from app.models.customer import Customer   # Phase 4
-# from app.models.contact import Contact     # Phase 4
-# from app.models.email_template import EmailTemplate     # Phase 6
-# from app.models.email_campaign import EmailCampaign     # Phase 6
-# from app.models.send_log import SendLog                 # Phase 6
-# from app.models.unsubscribe import Unsubscribe          # Phase 6
+# Phase 1
+from app.models.tenant import Tenant
+from app.models.user import User
+from app.models.platform_admin import PlatformAdmin
+
+# Phase 2+
+# from app.models.enterprise import EnterpriseProfile
+# from app.models.product import Product
+# from app.models.icp import Icp
+# from app.models.customer import Customer
+# from app.models.contact import Contact
+# from app.models.email_template import EmailTemplate
+# from app.models.email_campaign import EmailCampaign
+# from app.models.send_log import SendLog
+# from app.models.unsubscribe import Unsubscribe
 
 __all__ = ["Base"]
