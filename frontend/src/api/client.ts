@@ -28,11 +28,22 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const status = error.response?.status;
     const msg = error.response?.data?.detail || error.message || "请求失败";
-    // 401 不弹窗（由路由守卫处理跳转）
-    if (error.response?.status !== 401) {
-      ElMessage.error(msg);
+    const isAuthEndpoint = error.config?.url?.includes("/auth/");
+    const hasExistingToken = !!localStorage.getItem("access_token");
+
+    // 登录/注册等认证接口：由页面自行处理错误展示，拦截器不弹 toast
+    if (isAuthEndpoint) {
+      return Promise.reject(error);
     }
+
+    // 已登录用户的 401：token 过期，路由守卫 fetchMe 会静默处理跳转
+    if (status === 401 && hasExistingToken) {
+      return Promise.reject(error);
+    }
+
+    ElMessage.error(msg);
     return Promise.reject(error);
   }
 );

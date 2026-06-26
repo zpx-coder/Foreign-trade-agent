@@ -2,6 +2,7 @@
 
 import uuid
 import re
+from typing import List
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -63,7 +64,7 @@ class UserLoginResponse(BaseModel):
 class UserMeResponse(BaseModel):
     user: UserInfo
     tenant: TenantInfo
-    permissions: list[str]
+    permissions: List[str]
 
 
 class RefreshRequest(BaseModel):

@@ -7,7 +7,7 @@ Create Date: 2026-06-25 17:15:51.445997
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ENUM as PGEnum
 
 revision: str = "3130e927b4b1"
 down_revision: Union[str, None] = "2e5947dbd20b"
@@ -23,13 +23,13 @@ def upgrade() -> None:
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column(
             "plan_type",
-            sa.Enum("free", "pro", "enterprise", name="plan_type", create_type=False),
+            PGEnum("free", "pro", "enterprise", name="plan_type", create_type=False),
             nullable=False,
             server_default="free",
         ),
         sa.Column(
             "status",
-            sa.Enum("active", "suspended", "cancelled", name="tenant_status", create_type=False),
+            PGEnum("active", "suspended", "cancelled", name="tenant_status", create_type=False),
             nullable=False,
             server_default="active",
         ),

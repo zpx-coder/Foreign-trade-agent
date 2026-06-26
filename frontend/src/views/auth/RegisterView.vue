@@ -1,5 +1,15 @@
 <template>
   <AuthLayout subtitle="创建您的企业账户">
+    <el-alert
+      v-if="errorMessage"
+      :title="errorMessage"
+      type="error"
+      show-icon
+      :closable="true"
+      class="error-alert"
+      @close="errorMessage = ''"
+    />
+
     <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleRegister">
       <el-form-item prop="name">
         <el-input v-model="form.name" placeholder="您的姓名" prefix-icon="User" size="large" />
@@ -8,7 +18,7 @@
         <el-input v-model="form.company_name" placeholder="企业名称" prefix-icon="OfficeBuilding" size="large" />
       </el-form-item>
       <el-form-item prop="email">
-        <el-input v-model="form.email" placeholder="邮箱" prefix-icon="Message" size="large" />
+        <el-input v-model="form.email" placeholder="邮箱" prefix-icon="Message" size="large" @input="errorMessage = ''" />
       </el-form-item>
       <el-form-item prop="password">
         <el-input
@@ -18,6 +28,7 @@
           prefix-icon="Lock"
           size="large"
           show-password
+          @input="errorMessage = ''"
         />
       </el-form-item>
       <el-form-item>
@@ -35,7 +46,7 @@
 <script setup lang="ts">
 import { ref, reactive } from "vue";
 import { useRouter } from "vue-router";
-import { type FormInstance, type FormRules } from "element-plus";
+import { type FormInstance, type FormRules, ElMessage } from "element-plus";
 import AuthLayout from "@/layouts/AuthLayout.vue";
 import { useAuthStore } from "@/stores/auth";
 
@@ -43,6 +54,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const formRef = ref<FormInstance>();
 const loading = ref(false);
+const errorMessage = ref("");
 
 const form = reactive({
   name: "",
@@ -67,9 +79,18 @@ async function handleRegister() {
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
   loading.value = true;
+  errorMessage.value = "";
   try {
     await authStore.register(form);
+    ElMessage.success("注册成功，欢迎加入！");
     router.push("/app/dashboard");
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || "";
+    if (detail.includes("已存在") || detail.includes("已注册") || detail.includes("duplicate")) {
+      errorMessage.value = "该邮箱已注册，请直接登录";
+    } else {
+      errorMessage.value = detail || "注册失败，请稍后重试";
+    }
   } finally {
     loading.value = false;
   }
@@ -79,6 +100,9 @@ async function handleRegister() {
 <style scoped lang="scss">
 .w-full {
   width: 100%;
+}
+.error-alert {
+  margin-bottom: 16px;
 }
 .form-footer {
   text-align: center;

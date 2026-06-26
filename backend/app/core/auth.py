@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import jwt as pyjwt
 from fastapi import Depends, HTTPException, status
@@ -20,7 +21,7 @@ security_scheme = HTTPBearer(auto_error=False)
 # ────────────────────────── Token 工具函数 ──────────────────────────
 
 
-def create_access_token(subject: str, extra_claims: dict | None = None) -> str:
+def create_access_token(subject: str, extra_claims: Optional[dict] = None) -> str:
     """生成 Access Token（2 小时有效）"""
     now = datetime.now(timezone.utc)
     payload = {
@@ -62,7 +63,7 @@ def decode_token(token: str) -> dict:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """从 JWT 中解析当前租户用户"""
@@ -100,7 +101,7 @@ def require_roles(*allowed_roles: str):
 
 
 async def get_current_admin(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> PlatformAdmin:
     """从 JWT 中解析当前平台管理员"""
