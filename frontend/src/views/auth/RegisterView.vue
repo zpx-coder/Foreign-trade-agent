@@ -28,6 +28,17 @@
           prefix-icon="Lock"
           size="large"
           show-password
+          @input="onPasswordChange"
+        />
+      </el-form-item>
+      <el-form-item prop="confirmPassword">
+        <el-input
+          v-model="form.confirmPassword"
+          type="password"
+          placeholder="确认密码"
+          prefix-icon="Lock"
+          size="large"
+          show-password
           @input="errorMessage = ''"
         />
       </el-form-item>
@@ -61,7 +72,19 @@ const form = reactive({
   company_name: "",
   email: "",
   password: "",
+  confirmPassword: "",
 });
+
+const validateConfirmPassword = (_rule: any, value: string, callback: any) => {
+  if (!value) {
+    callback(new Error("请再次输入密码"));
+  } else if (value !== form.password) {
+    callback(new Error("两次输入的密码不一致"));
+  } else {
+    callback();
+  }
+};
+
 const rules: FormRules = {
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
   company_name: [{ required: true, message: "请输入企业名称", trigger: "blur" }],
@@ -73,7 +96,16 @@ const rules: FormRules = {
     { required: true, message: "请输入密码", trigger: "blur" },
     { min: 8, message: "密码至少 8 位", trigger: "blur" },
   ],
+  confirmPassword: [
+    { required: true, validator: validateConfirmPassword, trigger: "blur" },
+  ],
 };
+
+// 密码变更时重新校验确认密码
+function onPasswordChange() {
+  errorMessage.value = "";
+  formRef.value?.validateField("confirmPassword");
+}
 
 async function handleRegister() {
   const valid = await formRef.value?.validate().catch(() => false);
