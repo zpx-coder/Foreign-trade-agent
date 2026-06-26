@@ -24,10 +24,24 @@ class UserRegisterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     company_name: str = Field(min_length=1, max_length=255)
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if not _EMAIL_PATTERN.match(v):
+            raise ValueError("邮箱格式不正确")
+        return v
+
 
 class UserLoginRequest(BaseModel):
     email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if not _EMAIL_PATTERN.match(v):
+            raise ValueError("邮箱格式不正确")
+        return v
 
 
 class TokenResponse(BaseModel):
@@ -77,6 +91,13 @@ class RefreshRequest(BaseModel):
 class AdminLoginRequest(BaseModel):
     email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if not _EMAIL_PATTERN.match(v):
+            raise ValueError("邮箱格式不正确")
+        return v
 
 
 class AdminInfo(BaseModel):

@@ -1,5 +1,6 @@
 """认证 API — 用户端 + 管理后台"""
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -105,7 +106,6 @@ async def login(data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
     refresh_token = create_refresh_token(str(user.id))
 
     # 更新最后登录时间
-    from datetime import datetime, timezone
     user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
 
@@ -183,7 +183,6 @@ async def admin_login(data: AdminLoginRequest, db: AsyncSession = Depends(get_db
     )
     refresh_token = create_refresh_token(str(admin.id))
 
-    from datetime import datetime, timezone
     admin.last_login_at = datetime.now(timezone.utc)
     await db.commit()
 
