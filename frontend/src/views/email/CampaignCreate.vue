@@ -1,3 +1,1 @@
-<template>
-<div class="page"><el-card><h2>CampaignCreate.vue</h2><p>后续 Phase 实现</p></el-card></div>
-</template>
+<template><div class="page"><el-card><h2>创建任务</h2><p>请使用发送任务列表页的「新建发送任务」按钮创建。</p><el-button type="primary" @click="$router.push('/app/email/campaigns')">前往任务列表</el-button></el-card></div></template>

@@ -32,3 +32,14 @@ async def get_db() -> AsyncSession:
         except Exception:
             await session.rollback()
             raise
+
+
+async def get_session():
+    """独立会话生成器（用于 SSE / 后台任务等非请求上下文中）"""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

@@ -30,6 +30,7 @@ from app.schemas.auth import (
     AdminLoginResponse,
     AdminInfo,
 )
+from app.schemas.members import ChangePasswordRequest
 
 router = APIRouter()
 
@@ -117,8 +118,8 @@ async def login(data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(data: RefreshRequest):
-    """刷新 Access Token（Refresh Token 轮换）"""
+async def refresh_token(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """刷新 Access Token（Refresh Token 轮换）— 验证用户/管理员仍有效"""
     payload = decode_token(data.refresh_token)
     if payload.get("type") != "refresh":
         raise HTTPException(
@@ -126,11 +127,34 @@ async def refresh_token(data: RefreshRequest):
         )
 
     user_id = payload.get("sub")
+
+    # 验证用户或管理员仍然存在且处于活跃状态
+    if payload.get("admin_role"):
+        # 管理员 token
+        admin_result = await db.execute(
+            select(PlatformAdmin).where(PlatformAdmin.id == user_id)
+        )
+        admin = admin_result.scalar_one_or_none()
+        if not admin or not admin.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="账户不存在或已禁用",
+            )
+    else:
+        # 用户 token
+        user_result = await db.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one_or_none()
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="账户不存在或已禁用",
+            )
+
     # 生成新的 Token 对（Refresh Token 轮换）
     access_token = create_access_token(user_id)
-    refresh_token = create_refresh_token(user_id)
+    new_refresh_token = create_refresh_token(user_id)
 
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
 
 
 @router.get("/me", response_model=UserMeResponse)
@@ -152,6 +176,25 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
         tenant=TenantInfo.model_validate(tenant),
         permissions=permission_map.get(current_user.role, []),
     )
+
+
+@router.post("/change-password")
+async def change_password(
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改密码"""
+    if not verify_password(data.old_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="旧密码不正确")
+    if data.new_password != data.confirm_password:
+        raise HTTPException(status_code=400, detail="两次输入的新密码不一致")
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="新密码至少 8 位")
+
+    current_user.password_hash = hash_password(data.new_password)
+    await db.commit()
+    return {"message": "密码已修改"}
 
 
 @router.post("/logout")

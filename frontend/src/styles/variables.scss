@@ -1,17 +1,56 @@
-// ── 项目级 SCSS 变量 ──
+// ── 项目级 SCSS 变量 & 设计令牌 ──
+// 设计风格：简约高级 AI 科技风
 
 // 布局
-$sidebar-width: 220px;
+$sidebar-width: 232px;
 $sidebar-collapsed-width: 64px;
 $header-height: 56px;
-$content-padding: 24px;
+$content-padding: 28px;
+$content-max-width: 1400px;
 
-// Element Plus 主题色覆盖（通过 CSS 变量）
+// ── Element Plus 主题色覆盖 ──
 :root {
-  --el-color-primary: #1e6fff;
-  --el-color-success: #22c55e;
+  // 主色 — 科技蓝
+  --el-color-primary: #2563eb;
+  --el-color-primary-light-3: #5b8def;
+  --el-color-primary-light-5: #93b4f5;
+  --el-color-primary-light-7: #c7d7fa;
+  --el-color-primary-light-8: #dce6fc;
+  --el-color-primary-light-9: #eef3fd;
+  --el-color-primary-dark-2: #1d4fd6;
+
+  // 功能色
+  --el-color-success: #10b981;
   --el-color-warning: #f59e0b;
   --el-color-danger: #ef4444;
+
+  // 中性色 — slate 系
+  --el-text-color-primary: #1e293b;
+  --el-text-color-regular: #334155;
+  --el-text-color-secondary: #64748b;
+  --el-text-color-placeholder: #94a3b8;
+  --el-border-color: #e2e8f0;
+  --el-border-color-light: #f1f5f9;
+  --el-border-color-lighter: #f8fafc;
+  --el-fill-color: #f1f5f9;
+  --el-fill-color-light: #f8fafc;
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f8fafc;
+
+  // 圆角 — 更圆润
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 20px;
+  --el-border-radius-circle: 50%;
+
+  // 阴影 — 更柔和
+  --el-box-shadow-light: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --el-box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --el-box-shadow-dark: 0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
+
+  // 字体
+  --el-font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 // 断点
@@ -19,3 +58,4 @@ $breakpoint-sm: 640px;
 $breakpoint-md: 768px;
 $breakpoint-lg: 1024px;
 $breakpoint-xl: 1280px;
+$breakpoint-2xl: 1536px;

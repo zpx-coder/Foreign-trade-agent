@@ -7,6 +7,8 @@ from typing import Optional
 class Settings(BaseSettings):
     # ── 应用 ──
     APP_ENV: str = "development"
+    APP_BASE_URL: str = "http://localhost:8000"
+    SECRET_KEY: str = "dev-secret-change-in-production"
     LOG_LEVEL: str = "INFO"
     CORS_ORIGINS: str = "http://localhost:3000"
 
@@ -41,6 +43,10 @@ class Settings(BaseSettings):
     # ── 邮件发送 ──
     EMAIL_SEND_INTERVAL_SECONDS: int = 45    # 默认 45 秒/封
     EMAIL_DAILY_QUOTA: int = 450             # 默认日配额（留余量）
+
+    # ── 文件上传 ──
+    UPLOAD_DIR: str = "uploads"
+    MAX_UPLOAD_SIZE_MB: int = 5
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

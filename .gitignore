@@ -37,6 +37,9 @@ logs/
 coverage/
 .nyc_output/
 
+# Uploads
+uploads/
+
 # Cache
 .cache/
 .turbo/

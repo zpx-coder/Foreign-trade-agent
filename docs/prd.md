@@ -1,22 +1,26 @@
 # AI 外贸助手 — 产品需求文档 (PRD)
 
-> **版本**：v1.0 | **日期**：2026-06-25 | **状态**：MVP 一期规划
-> 
+> **版本**：v1.1 | **日期**：2026-07-16 | **状态**：MVP 一期迭代
+>
 > 本文档定义 AI 外贸助手的产品需求，作为设计、开发、测试的基准文档。
 > 需求变更须通过 PR 评审，重大变更按 CLAUDE.md 第一章确认机制执行。
+>
+> **v1.1 说明**：本文档在 v1.0 基础上，根据 Phase 0–7 实际开发结果进行了全面修订。
+> 与初始规划的差异详见 [§11 v1.1 变更记录](#11-v11-变更记录)。
 
 ---
 
 ## 目录
 
 1. [产品概述](#1-产品概述)
-2. [用户角色与权限](#2-用户角色与权限)
+2. [产品形态与角色体系](#2-产品形态与角色体系)
 3. [功能需求](#3-功能需求)
    - [3.1 企业客户画像生成](#31-企业客户画像生成)
    - [3.2 全网客户获取](#32-全网客户获取)
    - [3.3 客户信息补全](#33-客户信息补全)
    - [3.4 邮件营销模块](#34-邮件营销模块)
    - [3.5 WhatsApp 营销模块（二期）](#35-whatsapp-营销模块二期)
+   - [3.6 管理后台（平台级）](#36-管理后台平台级)
 4. [非功能需求](#4-非功能需求)
 5. [技术架构决策](#5-技术架构决策)
 6. [数据模型概要](#6-数据模型概要)
@@ -24,6 +28,7 @@
 8. [分期规划](#8-分期规划)
 9. [风险与假设](#9-风险与假设)
 10. [附录](#10-附录)
+11. [v1.1 变更记录](#11-v11-变更记录)
 
 ---
 
@@ -816,13 +821,323 @@ created_at TIMESTAMPTZ
 | CAN-SPAM | 美国反垃圾邮件法案 |
 | BSP | Business Solution Provider，WhatsApp 商业解决方案提供商 |
 
-### 10.2 变更记录
+### 10.2 术语表（续）
+
+| 术语 | 全称 / 说明 |
+|------|-------------|
+| HS Code | 海关编码（Harmonized System Code），国际贸易商品分类标准 |
+| MOQ | Minimum Order Quantity，最小起订量 |
+| SMTP | Simple Mail Transfer Protocol，邮件发送协议 |
+
+---
+
+## 11. v1.1 变更记录
+
+> 本章记录从 PRD v1.0（2026-06-25）到 v1.1（2026-07-16）期间，经 Phase 0–7 实际开发后，
+> 与初始规划产生的所有偏差。变更按影响范围从大到小排列。
+
+### 11.1 架构级变更
+
+#### 11.1.1 邮件发送通道：Gmail OAuth → 通用 SMTP
+
+| 维度 | v1.0 规划 | v1.1 实际 |
+|------|-----------|-----------|
+| 发送方式 | Gmail API / Microsoft Graph API（OAuth 2.0） | **通用 SMTP 协议** |
+| 认证方式 | OAuth 授权码流程，Token 加密存储 | SMTP 用户名密码，AES-256 加密存储 |
+| 配置粒度 | 全局邮箱连接 | **租户级 SMTP 配置**（每租户可配独立发件服务器） |
+| 发送任务 | 关联已连接邮箱 | 发送任务创建时指定 SMTP 配置（`smtp_config` JSONB） |
+
+**变更理由**：
+- Gmail OAuth 需要 Google Cloud Console 审核，上线周期长
+- SMTP 方案覆盖更多邮箱服务商（腾讯企业邮、网易、阿里云等），更符合国内外贸企业实际使用场景
+- 租户级配置灵活性更高，企业可用自己的邮件服务器发送
+
+**相关表变更**：
+- `email_campaigns` 新增 `smtp_config JSONB` 字段
+- `tenant` 新增 `settings JSONB` 字段（存储租户级 SMTP 默认配置）
+- 新增 API：`GET/PUT /api/v1/settings/smtp`（租户级 SMTP 配置管理）
+
+#### 11.1.2 客户搜索策略简化
+
+| 维度 | v1.0 规划 | v1.1 实际 |
+|------|-----------|-----------|
+| 搜索渠道 | Google + LinkedIn + Facebook + Amazon 多渠道并行 | **单一路由**（POST `/api/v1/customers/search`） |
+| 实时反馈 | SSE 流式推送各渠道进度 | SSE 保留但各渠道搜索聚合为统一接口 |
+| 渠道适配器 | Channel 接口 + 多实现 | 暂未实现独立的渠道适配器层 |
+| 结果去重 | 域名/企业名模糊去重 | 基础去重 |
+
+**变更理由**：MVP 阶段优先验证核心流程，多渠道并行搜索和渠道适配器模式留待二期实现。
+
+#### 11.1.3 部署架构简化
+
+| 维度 | v1.0/dev-spec 规划 | v1.1 实际 |
+|------|---------------------|-----------|
+| Nginx 容器 | docker-compose 含 nginx 服务 | **不含 nginx 容器**（`nginx.conf` 文件保留备用） |
+| 服务发现 | 容器间通过服务名通信（`db:5432`） | **localhost 直连**（开发环境） |
+
+**变更理由**：开发阶段直接用 Vite 代理到 FastAPI，生产部署时再加 Nginx。
+
+### 11.2 数据模型变更
+
+#### 11.2.1 产品表（product）— 外贸属性增强
+
+v1.0 规划的产品字段与通用 CMS 类似，v1.1 增加了外贸行业特有字段：
+
+| 字段 | 类型 | v1.0 | v1.1 | 说明 |
+|------|------|:----:|:----:|------|
+| `name` | VARCHAR(255) | ✓ | ✓ | |
+| `description` | TEXT | ✓ | ✓ | |
+| `category` | VARCHAR(100) | ✓ | ✓ | |
+| `hs_code` | VARCHAR(20) | ✗ | **新增** | 海关 HS 编码，出口报关必需 |
+| `price_usd` | NUMERIC(12,2) | ✗ | **新增** | 美元单价 |
+| `moq` | INTEGER | ✗ | **新增** | 最小起订量（Minimum Order Quantity） |
+| `image_url` | VARCHAR(512) | ≤10 张 | **1 张** | 简化为单图，多图后续支持 |
+| `is_active` | BOOLEAN | ✗ | **新增** | 软删除/下架标记 |
+
+#### 11.2.2 客户表（customers）— 结构重构
+
+| 维度 | v1.0 规划 | v1.1 实际 |
+|------|-----------|-----------|
+| 企业名称 | `company_name` | `name`（简化） |
+| 企业规模 | `scale`（枚举：小/中/大） | `company_size`（自由文本，更灵活） |
+| 区域 | `region`（省/州） | `city`（城市级精度） |
+| 主营产品 | `main_products JSONB` | **移除**（信息转到 `source_data` 和 `ai_summary`） |
+| 社交链接 | `social_links JSONB` | **移除** |
+| 匹配度评分 | `match_score` INT (0-100) | **移除**（MVP 未实现评分算法） |
+| 匹配原因 | `match_reason` TEXT | **移除** |
+| 来源渠道 | `source_channel`（枚举） | `source`（自由文本，更灵活） |
+| 来源 URL | — | **新增** `source_url` |
+| 原始数据 | — | **新增** `source_data JSONB`（保留搜索原始返回） |
+| AI 摘要 | — | **新增** `ai_summary TEXT` |
+| 备注 | — | **新增** `notes TEXT` |
+| 补全状态 | — | **新增** `enrichment_status` / `last_enriched_at` / `enrichment_count` |
+| 创建人 | — | **新增** `created_by` FK → user |
+
+#### 11.2.3 联系人表（contacts）— 精简
+
+与 v1.0 规划的 `contact` 表相比：
+
+| 移除字段 | 原因 |
+|----------|------|
+| `decision_level`（决策层级） | MVP 未实现 AI 职位推断 |
+| `email_validity`（邮箱有效性） | MVP 未接入邮箱验证服务 |
+| `data_source`（数据来源） | 简化为统一入口 |
+
+| 新增字段 | 说明 |
+|----------|------|
+| `is_primary` BOOLEAN | 标记首要联系人 |
+| `notes` TEXT | 用户自定义备注 |
+| `tenant_id` FK | 直接关联租户（加速查询，跳过 customer join） |
+
+命名调整：`full_name` → `name`，`job_title` → `title`。
+
+#### 11.2.4 邮件模板表（email_templates）— 扩展
+
+与 v1.0 相比新增字段：
+
+| 新增字段 | 类型 | 说明 |
+|----------|------|------|
+| `name` | VARCHAR(255) | 模板名称（用户自定义） |
+| `body_text` | TEXT | 纯文本版邮件（兼容纯文本客户端） |
+| `key_points` | TEXT | 关键卖点文本 |
+| `spam_score` | INTEGER | AI 垃圾邮件风险评分（0-100） |
+| `read_time_seconds` | INTEGER | AI 估算阅读时间 |
+| `input_data` | JSONB | 生成时的输入参数快照 |
+| `output_data` | JSONB | AI 生成的完整输出 |
+| `status` | VARCHAR | 模板状态（draft / active / archived） |
+| `created_by` | UUID FK | 创建人 |
+
+移除字段：`variables` JSONB（变量从模板内容中动态解析）。
+
+#### 11.2.5 邮件发送任务表（email_campaigns）— 追踪增强
+
+| 维度 | v1.0 | v1.1 |
+|------|------|------|
+| 统计维度 | sent / success / failed | **sent / delivered / opened / bounced** |
+| 定时发送 | `scheduled_at` | `schedule_at`（命名调整） |
+| 完成时间 | `finished_at` | `completed_at`（命名调整） |
+| SMTP 配置 | 全局 | **`smtp_config JSONB`**（任务级） |
+| 客户列表 | 关联表 | **`customer_ids JSONB`**（快照式存储） |
+
+#### 11.2.6 发送日志表（send_logs）— 新增追踪像素
+
+v1.0 规划中未包含追踪像素实现细节，v1.1 新增：
+
+| 新增字段 | 说明 |
+|----------|------|
+| `tracking_id` UUID | 唯一追踪标识，用于 1×1 透明像素 URL |
+| `opened_at` TIMESTAMPTZ | 邮件打开时间 |
+| `error_message` TEXT | 发送失败原因 |
+
+追踪端点：`GET /api/v1/tracking/{tracking_id}.png` 返回透明像素并记录打开事件。
+
+#### 11.2.7 租户表（tenant）— 新增配置存储
+
+v1.1 新增 `settings JSONB` 字段，存储租户级配置（当前含默认 SMTP 配置），无需新建配置表。
+
+#### 11.2.8 表命名变更
+
+| v1.0 规划 | v1.1 实际 | 说明 |
+|-----------|-----------|------|
+| `icp` | `icps` | 统一复数命名 |
+| `contact` | `contacts` | 统一复数命名 |
+| `email_log` | `send_logs` | 更准确反映发送日志语义 |
+| `unsubscribe_list` | `unsubscribes` | 简化名称 |
+
+### 11.3 API 变更
+
+#### 11.3.1 新增 API
+
+| 端点 | 说明 | 来源 |
+|------|------|------|
+| `POST /api/v1/auth/change-password` | 用户修改密码 | Phase 1 补充 |
+| `GET /api/v1/customers/import-template` | 下载客户导入模板 | Phase 4 补充 |
+| `POST /api/v1/customers/import` | 批量导入客户（Excel/CSV） | Phase 4 补充 |
+| `GET /api/v1/customers/{id}/contacts` | 客户下联系人列表 | Phase 4 补充 |
+| `POST /api/v1/customers/{id}/contacts` | 为客户添加联系人 | Phase 4 补充 |
+| `PUT /api/v1/customers/{id}/contacts/{cid}` | 编辑联系人 | Phase 4 补充 |
+| `DELETE /api/v1/customers/{id}/contacts/{cid}` | 删除联系人 | Phase 4 补充 |
+| `GET /api/v1/members` | 成员列表 | Phase 7 新增 |
+| `POST /api/v1/members/invite` | 邀请成员 | Phase 7 新增 |
+| `PUT /api/v1/members/{id}` | 编辑成员信息 | Phase 7 新增 |
+| `DELETE /api/v1/members/{id}` | 移除成员 | Phase 7 新增 |
+| `GET /api/v1/settings/smtp` | 获取租户 SMTP 配置 | Phase 7 新增 |
+| `PUT /api/v1/settings/smtp` | 更新租户 SMTP 配置 | Phase 7 新增 |
+| `GET /api/v1/tracking/{tracking_id}.png` | 邮件追踪像素 | Phase 6 新增 |
+| `GET /api/v1/unsubscribe` | 退订确认页 | Phase 6 新增 |
+| `POST /api/v1/unsubscribe` | 执行退订 | Phase 6 新增 |
+
+#### 11.3.2 API 调整
+
+| 端点 | v1.0 | v1.1 |
+|------|------|------|
+| 管理后台登录 | `POST /api/v1/admin/auth/login` | `POST /api/v1/auth/admin/login`（归入 auth 路由） |
+| 管理后台登出 | `POST /api/v1/admin/auth/logout` | **未实现** |
+| 管理后台获取当前管理员 | `GET /api/v1/admin/auth/me` | `GET /api/v1/auth/me`（与用户共用，token 中区分） |
+| 租户停用/启用 | `POST /admin/tenants/{id}/suspend` / `activate` | `PUT /api/v1/admin/tenants/{id}`（status 字段更新） |
+| 管理后台操作日志 | `GET /api/v1/admin/logs` | **未实现**（二期） |
+| 邮件预览 | `POST /campaigns/{id}/preview` | `POST /api/v1/email-campaigns/{id}/preview`（功能一致） |
+| 客户搜索 SSE | `POST /api/v1/customers/search` → SSE 流 | 接口保留但 SSE 实现简化 |
+| 邮件模板生成 | `POST /api/v1/email-templates/generate` | `POST /api/v1/email-templates/{id}/generate`（需先创建再生成） |
+| ICP 生成 | `POST /api/v1/icps/generate`（直接生成） | `POST /api/v1/icps/{id}/generate`（需先创建再生成） |
+
+#### 11.3.3 未实现的 API（延期至二期）
+
+| v1.0 规划的端点 | 说明 |
+|-----------------|------|
+| `GET /api/v1/email-auth/gmail/url` | Gmail OAuth URL → 改为 SMTP |
+| `POST /api/v1/email-auth/gmail/callback` | Gmail OAuth 回调 → 改为 SMTP |
+| `GET /api/v1/email-auth/status` | 邮箱连接状态 → 改为 SMTP 配置 |
+| `DELETE /api/v1/email-auth/{provider}` | 断开邮箱连接 → 改为 SMTP |
+| `POST /api/v1/email-campaigns/{id}/cancel` | 取消发送任务 |
+| `GET /api/v1/email-campaigns/{id}/logs` | 发送日志分页查询 |
+| `GET /api/v1/admin/logs` | 管理后台操作日志 |
+| `GET /api/v1/admin/dashboard` | 运营仪表盘（统计聚合到 `/stats`） |
+
+### 11.4 前端路由变更
+
+| 页面 | v1.0/dev-spec 规划 | v1.1 实际 |
+|------|---------------------|-----------|
+| 产品管理 | `/app/products` + `/create` + `/:id/edit` 三条路由 | **无独立路由**（功能集到列表页弹窗操作） |
+| 企业资料 | `/app/enterprise`（查看）+ `/edit`（编辑） | **`/app/enterprise` 直接进入编辑页** |
+| 邮件模板创建 | `/app/email/templates/create` | **重定向到列表页**（弹窗式创建） |
+| 邮件模板编辑 | `/app/email/templates/:id/edit` | **重定向到列表页** |
+| 发送任务创建 | `/app/email/campaigns/create` | **重定向到列表页** |
+| 管理后台系统配置 | `/admin/settings` | **未实现** |
+| 404 页面 | 未规划 | **已实现** `NotFound.vue` |
+
+### 11.5 功能模块实现度总览
+
+| 模块 | v1.0 规划 | v1.1 实际 | 差异 |
+|------|:--------:|:--------:|------|
+| **认证系统** | 注册/登录/Token 刷新/角色权限/管理后台登录 | 完整实现 + 新增修改密码 | ✓ 超出 |
+| **企业资料** | 基础 CRUD + Logo 上传 | 完整实现 | ✓ |
+| **产品管理** | CRUD + 多图上传 | CRUD + HS 编码/单价/MOQ 外贸字段 | 字段调整 |
+| **ICP 客户画像** | 多步表单 + AI 流式生成 | 完整实现 | ✓ |
+| **客户获取** | Google/LinkedIn 多渠道 SSE 搜索 | 基础搜索 + 批量导入 Excel/CSV | 渠道简化 |
+| **信息补全** | 适配器模式 + 公开数据 + 商业接口 | 基础补全 + 联系人 CRUD | 简化 |
+| **邮件模板** | AI 生成 + 变量系统 + 垃圾评分 | 完整实现 + spam_score + 阅读时间 | ✓ 超出 |
+| **邮件发送** | Gmail API + 定时 + 追踪 | **SMTP** + 定时 + 追踪像素 + 退订 | 通道更灵活 |
+| **成员管理** | 角色分配 | 完整 CRUD + 邀请机制 | ✓ |
+| **租户设置** | 未规划 | SMTP 配置管理 | **新增** |
+| **管理后台** | 租户管理 + 运营仪表盘 + 操作日志 | 租户管理 + 统计概览（日志延期） | 略微简化 |
+| **WhatsApp** | 二期 | 未开发 | 按计划 |
+
+### 11.6 未实现项（已知差距，留待后续版本）
+
+| 功能 | v1.0 优先级 | 当前状态 | 计划 |
+|------|:---------:|:--------:|------|
+| 多渠道客户搜索（Google/LinkedIn 适配器） | P0 | 接口存在，渠道未独立 | v1.2 |
+| 客户匹配度评分系统 | P0 | 未实现 | v1.2 |
+| Gmail/Outlook OAuth 邮箱连接 | P0 | 改为 SMTP | 评估中 |
+| 邮箱有效性校验服务 | P1 | 未接入 | v1.2 |
+| 联系人决策层级 AI 推断 | P1 | 未实现 | v1.2 |
+| 平台操作审计日志 | P2 | 未实现 | v1.3 |
+| 管理后台系统配置页 | P1 | 未实现 | v1.2 |
+| 邮件任务取消功能 | — | 未实现 | v1.2 |
+| 发送日志独立查询接口 | — | 未实现 | v1.2 |
+| 产品多图上传 | P0 | 单图 | v1.2 |
+| 产品管理独立路由页 | P0 | 视图文件存在但路由未注册 | v1.2 |
+| 前端企业资料/产品/租户/UI 独立 Store | P1 | 仅 4/8 个 Store 实现 | v1.2 |
+
+### 11.7 其他技术偏差
+
+#### 11.7.1 异步任务方案：Celery → asyncio.create_task
+
+Dev Spec 规划使用 Celery + Redis 作为消息队列执行邮件发送等耗时任务，实际实现使用 Python 原生的 `asyncio.create_task()` 在 FastAPI 事件循环中执行后台发送。
+
+**影响**：服务重启时未完成的发送任务会丢失，不适合高并发场景，但 MVP 阶段足够。
+
+#### 11.7.2 基础设施使用状态
+
+| 服务 | docker-compose 配置 | 应用代码实际使用 |
+|------|:------------------:|:----------------:|
+| PostgreSQL (pgvector) | ✓ | ✓ 全部数据存储 |
+| Redis | ✓ | **未使用**（容器运行但无缓存/队列逻辑） |
+| Elasticsearch | ✓ | **未使用**（容器运行但无索引/搜索逻辑） |
+
+Redis 和 ES 已提前部署为后续功能准备（ES 用于客户全文搜索、Redis 用于 Token 黑名单/缓存）。
+
+#### 11.7.3 SSE 实现格式差异
+
+Dev Spec 定义了标准 SSE 事件格式（`event: progress\ndata: {...}\n\n`），实际实现使用**扁平 JSON 格式**（`data: {json}\n\n`），事件类型内嵌在 JSON payload 中（`{type: 'progress', ...}`）。功能等价，但格式不兼容 Dev Spec 定义。
+
+#### 11.7.4 新增搜索渠道
+
+除 PRD 规划的 Google/LinkedIn 外，代码中额外实现了：
+- **DuckDuckGo 搜索**（`backend/app/services/search/duckduckgo_channel.py`）
+- **AI 搜索通道**（`backend/app/services/search/ai_search_channel.py`）
+
+这两个渠道在 v1.0 PRD 中未规划。
+
+#### 11.7.5 前端状态管理简化
+
+Dev Spec 规划了 8 个 Pinia Store（auth / enterprise / product / icp / customer / email / tenant / ui），实际只实现了 4 个核心 Store：
+- `auth.ts`（认证状态）
+- `icp.ts`（客户画像）
+- `customer.ts`（客户管理）
+- `email.ts`（邮件模板+发送任务）
+
+其余模块的状态在组件内通过组合式 API 管理，未抽取独立 Store。
+
+#### 11.7.6 产品管理路由未注册
+
+`frontend/src/views/product/` 目录下存在 `ProductListView.vue`、`ProductCreate.vue`、`ProductEdit.vue`、`ProductForm.vue` 等完整组件，但路由配置（[frontend/src/router/index.ts](frontend/src/router/index.ts)）中**未注册产品相关路由**。产品功能可能通过侧边栏直接加载或集成在其他页面中。
+
+#### 11.7.7 客户数据导出
+
+新增 Excel 导出功能（[backend/app/api/customers.py](backend/app/api/customers.py)），支持按筛选条件或指定 ID 列表导出客户数据为 `.xlsx` 文件，v1.0 PRD 中未明确规划此功能。
+
+---
+
+### 变更记录
 
 | 版本 | 日期 | 变更内容 | 作者 |
 |------|------|----------|------|
 | v1.0 | 2026-06-25 | 初始版本，一期 MVP 需求 | zhaopuxuan |
+| v1.1 | 2026-07-16 | Phase 0-7 实施后全面修订：SMTP 替代 Gmail OAuth、数据模型精简/扩展、API 调整、实现度总览 | zhaopuxuan |
 
 ---
 
 > **审批状态**：待评审
-> **下一步**：技术设计文档 → 任务拆分 → Sprint 规划
+> **下一步**：v1.2 规划（多渠道搜索、评分系统、邮箱验证）

@@ -1,3 +1,1 @@
-<template>
-<div class="page"><el-card><h2>TemplateCreate.vue</h2><p>后续 Phase 实现</p></el-card></div>
-</template>
+<template><div class="page"><el-card><h2>模板创建</h2><p>请使用模板列表页的「新建模板」按钮创建。</p><el-button type="primary" @click="$router.push('/app/email/templates')">前往模板列表</el-button></el-card></div></template>

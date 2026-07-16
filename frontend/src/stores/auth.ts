@@ -83,6 +83,8 @@ export const useAuthStore = defineStore("auth", () => {
   async function adminLogin(email: string, password: string) {
     const { data } = await api.post("/auth/admin/login", { email, password });
     admin.value = data.admin;
+    // 持久化管理员基本信息以便页面刷新后恢复
+    localStorage.setItem("admin_info", JSON.stringify(data.admin));
     setAdminTokens(data.token.access_token, data.token.refresh_token);
   }
 
@@ -93,9 +95,29 @@ export const useAuthStore = defineStore("auth", () => {
       user.value = data.user;
       tenant.value = data.tenant;
       permissions.value = data.permissions;
-    } catch {
-      logout();
+    } catch (err: any) {
+      // 仅在 401/403 时登出，网络错误等不销毁会话
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        logout();
+      }
+      throw err;
     }
+  }
+
+  // ── 恢复管理员会话（页面刷新后） ──
+  function restoreAdminSession() {
+    const adminToken = localStorage.getItem("admin_access_token");
+    if (!adminToken) return false;
+    const saved = localStorage.getItem("admin_info");
+    if (saved) {
+      try {
+        admin.value = JSON.parse(saved);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 
   // ── 退出 ──
@@ -109,11 +131,12 @@ export const useAuthStore = defineStore("auth", () => {
     admin.value = null;
     localStorage.removeItem("admin_access_token");
     localStorage.removeItem("admin_refresh_token");
+    localStorage.removeItem("admin_info");
   }
 
   return {
     user, tenant, permissions, admin,
     isAuthenticated, isAdminAuthenticated, userRole, canManageMembers,
-    login, register, adminLogin, fetchMe, logout, adminLogout,
+    login, register, adminLogin, fetchMe, restoreAdminSession, logout, adminLogout,
   };
 });

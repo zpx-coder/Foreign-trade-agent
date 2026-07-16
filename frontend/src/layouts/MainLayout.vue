@@ -1,6 +1,6 @@
 <template>
   <el-container class="main-layout">
-    <el-aside :width="isCollapsed ? '64px' : '220px'" class="sidebar">
+    <el-aside :width="isCollapsed ? '64px' : '232px'" class="sidebar">
       <SidebarNav :collapsed="isCollapsed" />
     </el-aside>
     <el-container>
@@ -8,7 +8,9 @@
         <HeaderBar v-model:collapsed="isCollapsed" />
       </el-header>
       <el-main class="content">
-        <router-view />
+        <div class="content-inner">
+          <router-view />
+        </div>
       </el-main>
     </el-container>
   </el-container>
@@ -27,20 +29,26 @@ const isCollapsed = ref(false);
   height: 100vh;
 }
 .sidebar {
-  background: #001529;
-  transition: width 0.3s;
+  background: #0b1120;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.04);
 }
 .header {
   background: #fff;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 .content {
-  background: #f5f7fa;
-  padding: 20px;
+  background: #f8fafc;
+  padding: 24px 28px;
   overflow-y: auto;
+}
+.content-inner {
+  max-width: 1400px;
+  margin: 0 auto;
 }
 </style>

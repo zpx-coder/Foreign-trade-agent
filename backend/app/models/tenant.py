@@ -2,8 +2,9 @@
 
 import uuid
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, DateTime, Enum, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,6 +25,7 @@ class Tenant(Base):
         Enum("active", "suspended", "cancelled", name="tenant_status", create_type=False),
         default="active",
     )
+    settings: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import MainLayout from "@/layouts/MainLayout.vue";
+import AdminLayout from "@/layouts/AdminLayout.vue";
 
 // ── 公开路由 ──
 const publicRoutes: RouteRecordRaw[] = [
@@ -28,143 +30,124 @@ const publicRoutes: RouteRecordRaw[] = [
   },
 ];
 
-// ── 用户端路由 (/app/*) ──
-const appRoutes: RouteRecordRaw[] = [
-  {
-    path: "/app/dashboard",
-    name: "Dashboard",
-    component: () => import("@/views/dashboard/DashboardView.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/enterprise",
-    name: "Enterprise",
-    component: () => import("@/views/enterprise/EnterpriseEdit.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/products",
-    name: "Products",
-    component: () => import("@/views/product/ProductListView.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/products/create",
-    name: "ProductCreate",
-    component: () => import("@/views/product/ProductCreate.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/products/:id/edit",
-    name: "ProductEdit",
-    component: () => import("@/views/product/ProductEdit.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/icps",
-    name: "Icps",
-    component: () => import("@/views/icp/IcpListView.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/icps/create",
-    name: "IcpCreate",
-    component: () => import("@/views/icp/IcpCreate.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/icps/:id",
-    name: "IcpDetail",
-    component: () => import("@/views/icp/IcpDetail.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/customers",
-    name: "Customers",
-    component: () => import("@/views/customer/CustomerListView.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/customers/:id",
-    name: "CustomerDetail",
-    component: () => import("@/views/customer/CustomerDetail.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/email/templates",
-    name: "EmailTemplates",
-    component: () => import("@/views/email/TemplateListView.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/email/templates/create",
-    name: "EmailTemplateCreate",
-    component: () => import("@/views/email/TemplateCreate.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/email/templates/:id/edit",
-    name: "EmailTemplateEdit",
-    component: () => import("@/views/email/TemplateEdit.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/email/campaigns",
-    name: "EmailCampaigns",
-    component: () => import("@/views/email/CampaignListView.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/email/campaigns/create",
-    name: "EmailCampaignCreate",
-    component: () => import("@/views/email/CampaignCreate.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/email/campaigns/:id",
-    name: "EmailCampaignDetail",
-    component: () => import("@/views/email/CampaignDetail.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/settings",
-    name: "Settings",
-    component: () => import("@/views/settings/SettingsView.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/app/settings/members",
-    name: "Members",
-    component: () => import("@/views/settings/MemberListView.vue"),
-    meta: { requiresAuth: true, roles: ["super_admin", "admin"] },
-  },
-];
+// ── 用户端路由 — 嵌套在 MainLayout 下 ──
+const appRoutes: RouteRecordRaw = {
+  path: "/app",
+  component: MainLayout,
+  meta: { requiresAuth: true },
+  children: [
+    { path: "", redirect: "/app/dashboard" },
+    {
+      path: "dashboard",
+      name: "Dashboard",
+      component: () => import("@/views/dashboard/DashboardView.vue"),
+    },
+    {
+      path: "enterprise",
+      name: "Enterprise",
+      component: () => import("@/views/enterprise/EnterpriseEdit.vue"),
+    },
+    {
+      path: "icps",
+      name: "Icps",
+      component: () => import("@/views/icp/IcpListView.vue"),
+    },
+    {
+      path: "icps/create",
+      name: "IcpCreate",
+      component: () => import("@/views/icp/IcpCreate.vue"),
+    },
+    {
+      path: "icps/:id",
+      name: "IcpDetail",
+      component: () => import("@/views/icp/IcpDetail.vue"),
+    },
+    {
+      path: "customers",
+      name: "Customers",
+      component: () => import("@/views/customer/CustomerListView.vue"),
+    },
+    {
+      path: "customers/:id",
+      name: "CustomerDetail",
+      component: () => import("@/views/customer/CustomerDetail.vue"),
+    },
+    {
+      path: "email/templates",
+      name: "EmailTemplates",
+      component: () => import("@/views/email/TemplateListView.vue"),
+    },
+    {
+      path: "email/templates/create",
+      redirect: "/app/email/templates",
+    },
+    {
+      path: "email/templates/:id/edit",
+      redirect: "/app/email/templates",
+    },
+    {
+      path: "email/campaigns",
+      name: "EmailCampaigns",
+      component: () => import("@/views/email/CampaignListView.vue"),
+    },
+    {
+      path: "email/campaigns/create",
+      redirect: "/app/email/campaigns",
+    },
+    {
+      path: "email/campaigns/:id",
+      name: "EmailCampaignDetail",
+      component: () => import("@/views/email/CampaignDetail.vue"),
+    },
+    {
+      path: "settings",
+      name: "Settings",
+      component: () => import("@/views/settings/SettingsView.vue"),
+    },
+    {
+      path: "settings/members",
+      name: "Members",
+      component: () => import("@/views/settings/MemberListView.vue"),
+      meta: { roles: ["super_admin", "admin"] },
+    },
+  ],
+};
 
-// ── 管理后台路由 (/admin/*) ──
-const adminRoutes: RouteRecordRaw[] = [
-  {
-    path: "/admin/dashboard",
-    name: "AdminDashboard",
-    component: () => import("@/views/admin/DashboardView.vue"),
-    meta: { requiresAdmin: true },
-  },
-  {
-    path: "/admin/tenants",
-    name: "AdminTenants",
-    component: () => import("@/views/admin/TenantListView.vue"),
-    meta: { requiresAdmin: true },
-  },
-  {
-    path: "/admin/tenants/:id",
-    name: "AdminTenantDetail",
-    component: () => import("@/views/admin/TenantDetailView.vue"),
-    meta: { requiresAdmin: true },
-  },
-];
+// ── 管理后台路由 — 嵌套在 AdminLayout 下 ──
+const adminRoutes: RouteRecordRaw = {
+  path: "/admin",
+  component: AdminLayout,
+  meta: { requiresAdmin: true },
+  children: [
+    { path: "", redirect: "/admin/dashboard" },
+    {
+      path: "dashboard",
+      name: "AdminDashboard",
+      component: () => import("@/views/admin/DashboardView.vue"),
+    },
+    {
+      path: "tenants",
+      name: "AdminTenants",
+      component: () => import("@/views/admin/TenantListView.vue"),
+    },
+    {
+      path: "tenants/:id",
+      name: "AdminTenantDetail",
+      component: () => import("@/views/admin/TenantDetailView.vue"),
+    },
+  ],
+};
+
+// ── 404 路由 ──
+const notFoundRoute: RouteRecordRaw = {
+  path: "/:pathMatch(.*)*",
+  name: "NotFound",
+  component: () => import("@/views/NotFound.vue"),
+};
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [...publicRoutes, ...appRoutes, ...adminRoutes],
+  routes: [...publicRoutes, appRoutes, adminRoutes, notFoundRoute],
 });
 
 // ── 全局路由守卫 ──

@@ -3,34 +3,50 @@
     <router-view />
   </div>
   <div v-else class="app-loading">
-    <el-icon class="loading-icon" :size="32"><Loading /></el-icon>
+    <div class="loading-content">
+      <svg class="loading-logo" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="48" height="48" rx="12" fill="url(#applg)" />
+        <path d="M14 33V15l10 9-10 9Z" fill="#fff" />
+        <path d="M34 15v18l-10-9 10-9Z" fill="rgba(255,255,255,.7)" />
+        <defs>
+          <linearGradient id="applg" x1="0" y1="0" x2="48" y2="48">
+            <stop stop-color="#3b82f6" />
+            <stop offset="1" stop-color="#6366f1" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <p class="loading-text">AI 外贸助手</p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { Loading } from "@element-plus/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 
 const appReady = ref(false);
 
-// 应用初始化：恢复登录态
 (async () => {
   const authStore = useAuthStore();
 
-  // 有用户 token → 尝试恢复用户端会话
-  const userToken = localStorage.getItem("access_token");
-  if (userToken) {
-    try {
-      await authStore.fetchMe();
-    } catch {
-      // token 无效，清除残留
-      authStore.logout();
+  // 根据当前路径优先恢复对应会话
+  const isAdminPath = window.location.pathname.startsWith("/admin");
+  const adminToken = localStorage.getItem("admin_access_token");
+
+  if (isAdminPath && adminToken) {
+    // 管理后台路径：从 localStorage 恢复管理员会话
+    authStore.restoreAdminSession();
+  } else {
+    // 用户端路径：恢复用户会话
+    const userToken = localStorage.getItem("access_token");
+    if (userToken) {
+      try {
+        await authStore.fetchMe();
+      } catch {
+        // fetchMe 内部已处理 401/403 登出
+      }
     }
   }
-
-  // 有管理员 token → 仅标记（fetchMe 由路由守卫触发时再加载）
-  // 管理后台路由守卫会检查 isAdminAuthenticated
 
   appReady.value = true;
 })();
@@ -41,20 +57,36 @@ const appReady = ref(false);
   width: 100%;
   height: 100%;
 }
+
 .app-loading {
   width: 100%;
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
+  background: #0b1120;
 }
-.loading-icon {
-  color: #1e6fff;
-  animation: spin 1s linear infinite;
+
+.loading-content {
+  text-align: center;
 }
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+
+.loading-logo {
+  width: 48px;
+  height: 48px;
+  animation: logo-pulse 2s ease-in-out infinite;
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 2px;
+}
+
+@keyframes logo-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.8; }
 }
 </style>
