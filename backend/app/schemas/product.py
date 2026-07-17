@@ -15,6 +15,7 @@ class ProductCreateRequest(BaseModel):
     price_usd: Optional[Decimal] = Field(default=None, ge=0)
     moq: Optional[int] = Field(default=None, ge=1)
     image_url: Optional[str] = Field(default=None, max_length=512)
+    images: Optional[List[str]] = Field(default=None)  # v1.2 多图
 
 
 class ProductUpdateRequest(BaseModel):
@@ -25,6 +26,7 @@ class ProductUpdateRequest(BaseModel):
     price_usd: Optional[Decimal] = Field(default=None, ge=0)
     moq: Optional[int] = Field(default=None, ge=1)
     image_url: Optional[str] = Field(default=None, max_length=512)
+    images: Optional[List[str]] = Field(default=None)  # v1.2 多图
     is_active: Optional[bool] = None
 
 
@@ -38,6 +40,7 @@ class ProductResponse(BaseModel):
     price_usd: Optional[Decimal] = None
     moq: Optional[int] = None
     image_url: Optional[str] = None
+    images: Optional[List[str]] = None  # v1.2 多图
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.platform_admin import PlatformAdmin
+from app.models.enterprise import EnterpriseProfile
 from app.core.security import hash_password, verify_password
 from app.core.auth import (
     create_access_token,
@@ -51,6 +52,14 @@ async def register(data: UserRegisterRequest, db: AsyncSession = Depends(get_db)
     tenant = Tenant(name=data.company_name)
     db.add(tenant)
     await db.flush()
+
+    # 创建企业资料（v1.2：注册时自动带入企业名称）
+    profile = EnterpriseProfile(
+        tenant_id=tenant.id,
+        company_name=data.company_name,
+        country="中国",
+    )
+    db.add(profile)
 
     # 创建用户（超管角色）
     user = User(

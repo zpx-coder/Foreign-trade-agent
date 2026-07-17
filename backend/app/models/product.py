@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from sqlalchemy import String, Text, Numeric, Integer, Boolean, DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -29,7 +29,8 @@ class Product(Base):
         Numeric(12, 2), nullable=True,
     )
     moq: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    image_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    image_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)  # 保留兼容旧数据
+    images: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)  # v1.2 多图 URL 数组
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
