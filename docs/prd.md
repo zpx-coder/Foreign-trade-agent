@@ -1,12 +1,12 @@
 # AI 外贸助手 — 产品需求文档 (PRD)
 
-> **版本**：v1.1 | **日期**：2026-07-16 | **状态**：MVP 一期迭代
+> **版本**：v1.2 | **日期**：2026-07-17 | **状态**：一期迭代 — 企业资料增强
 >
 > 本文档定义 AI 外贸助手的产品需求，作为设计、开发、测试的基准文档。
 > 需求变更须通过 PR 评审，重大变更按 CLAUDE.md 第一章确认机制执行。
 >
-> **v1.1 说明**：本文档在 v1.0 基础上，根据 Phase 0–7 实际开发结果进行了全面修订。
-> 与初始规划的差异详见 [§11 v1.1 变更记录](#11-v11-变更记录)。
+> **v1.2 说明**：本文档在 v1.1 基础上，根据 v1.2 需求列表进行了企业资料模块增强。
+> 新增与变更详见 [§12 v1.2 变更记录](#12-v12-变更记录)。
 
 ---
 
@@ -1136,8 +1136,122 @@ Dev Spec 规划了 8 个 Pinia Store（auth / enterprise / product / icp / custo
 |------|------|----------|------|
 | v1.0 | 2026-06-25 | 初始版本，一期 MVP 需求 | zhaopuxuan |
 | v1.1 | 2026-07-16 | Phase 0-7 实施后全面修订：SMTP 替代 Gmail OAuth、数据模型精简/扩展、API 调整、实现度总览 | zhaopuxuan |
+| v1.2 | 2026-07-17 | 企业资料模块增强：外贸字段扩展、城市下拉选择、多图上传、产品图片、注册企业名自动带入 | zhaopuxuan |
 
 ---
 
+## 12. v1.2 变更记录
+
+> 本章记录从 PRD v1.1（2026-07-16）到 v1.2（2026-07-17）期间的企业资料模块增强。
+
+### 12.1 企业资料增强
+
+#### 12.1.1 国家字段处理
+
+| 维度 | v1.1 | v1.2 |
+|------|------|------|
+| 国家字段 | 前端自由文本输入 | **默认"中国"，前端隐藏**（目标用户均为中国国内外贸企业） |
+| country 列 | 保留 | 保留，Schema 默认值 `"中国"` |
+
+**变更理由**：产品定位面向中国国内外贸企业，国家信息无差异化价值，简化表单。
+
+#### 12.1.2 城市字段改为下拉选择
+
+| 维度 | v1.1 | v1.2 |
+|------|------|------|
+| 输入方式 | 自由文本 `<el-input>` | **下拉选择 `el-select` + filterable 模糊匹配** |
+| 数据源 | 无 | 前端静态中国城市列表（`cities.json`，约 300+ 城市） |
+
+#### 12.1.3 企业信息扩展（外贸采购商关注字段）
+
+v1.1 企业资料仅包含基础联系信息，v1.2 新增以下外贸行业字段：
+
+| 新增字段 | 类型 | 说明 |
+|----------|------|------|
+| `year_established` | INTEGER | 成立年份，体现企业经营历史 |
+| `employee_count` | VARCHAR(50) | 员工规模，如 "50-100人" |
+| `factory_area` | VARCHAR(100) | 工厂/厂房面积，如 "5000平方米" |
+| `annual_export_volume` | VARCHAR(100) | 年度出口额，如 "500万美元" |
+| `main_markets` | JSONB | 主要出口市场，如 `["北美","欧盟","东南亚"]` |
+| `certifications` | JSONB | 认证资质，如 `["ISO 9001","CE","FDA"]` |
+| `oem_odm` | VARCHAR(255) | OEM/ODM 代工能力描述 |
+| `company_advantages` | TEXT | 企业特色/核心竞争力 |
+
+**设计决策**：
+- `main_markets`、`certifications` 使用 JSONB 数组，支持多选标签，无需额外关联表
+- `employee_count`、`factory_area`、`annual_export_volume` 使用文本类型而非数值，适应"5000-10000平方米"等区间表述
+- 字段全部可选（nullable），不影响现有租户
+
+#### 12.1.4 企业图片上传
+
+v1.1 仅有 logo 上传后端端点（前端未接入），v1.2 新增：
+
+| 图片类型 | 存储字段 | 说明 |
+|----------|----------|------|
+| 企业 Logo | `logo_url` (VARCHAR) | 已有，本次接入前端 UI |
+| 工厂实景 | `factory_photos` (JSONB) | 多图上传，展示生产环境 |
+| 资质证件 | `certificate_photos` (JSONB) | 多图上传，展示认证证书 |
+
+- 新增 `POST /api/v1/enterprise/photos?type=factory|certificate` 多图上传端点
+- 复用现有 `uploads/` 文件存储 + `/uploads/` 静态服务
+- 前端统一使用 `el-upload` 组件，支持拖拽、预览、删除
+
+#### 12.1.5 注册企业名自动带入
+
+| 维度 | v1.1 | v1.2 |
+|------|------|------|
+| 企业资料创建 | 用户手动填写 | **注册时自动创建 EnterpriseProfile，company_name 取自注册表单** |
+| 已有租户兼容 | — | 首次访问企业资料页且无记录时，自动用 Tenant.name 创建 |
+
+### 12.2 产品图片增强
+
+#### 12.2.1 产品图片多图上传
+
+| 维度 | v1.1 | v1.2 |
+|------|------|------|
+| 产品图片 | `image_url` VARCHAR(512) 单图文本 URL | **`images` JSONB 多图 URL 数组** |
+| 上传方式 | 手动粘贴 URL | **新增 `POST /products/{id}/images` 上传端点** |
+
+- 新增可复用 `ImageUpload.vue` 组件（多图上传 + 预览 + 拖拽排序）
+- 迁移脚本：`image_url` 非空值转为 `images` 数组首元素
+
+### 12.3 附带修复
+
+- **产品路由注册**：`frontend/src/views/product/` 下完整页面文件存在但路由未注册，v1.2 在 `router/index.ts` 中注册 `/app/products`、`/app/products/create`、`/app/products/:id/edit` 三条路由
+
+### 12.4 数据模型变更汇总
+
+#### enterprise_profile 表新增字段
+
+```sql
+ALTER TABLE enterprise_profile
+  ADD COLUMN year_established INTEGER,
+  ADD COLUMN employee_count VARCHAR(50),
+  ADD COLUMN factory_area VARCHAR(100),
+  ADD COLUMN annual_export_volume VARCHAR(100),
+  ADD COLUMN main_markets JSONB,
+  ADD COLUMN certifications JSONB,
+  ADD COLUMN oem_odm VARCHAR(255),
+  ADD COLUMN company_advantages TEXT,
+  ADD COLUMN factory_photos JSONB,
+  ADD COLUMN certificate_photos JSONB;
+```
+
+#### product 表变更
+
+```sql
+ALTER TABLE product
+  ADD COLUMN images JSONB;
+-- 迁移: UPDATE product SET images = jsonb_build_array(image_url) WHERE image_url IS NOT NULL;
+-- 后续: ALTER TABLE product DROP COLUMN image_url;
+```
+
+### 12.5 新增 API
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/enterprise/photos` | POST | 上传企业图片（type=factory|certificate），返回 URL |
+| `/api/v1/products/{id}/images` | POST | 上传产品图片，返回 URL 数组 |
+
 > **审批状态**：待评审
-> **下一步**：v1.2 规划（多渠道搜索、评分系统、邮箱验证）
+> **下一步**：v1.3 规划（多渠道搜索、评分系统、邮箱验证）
