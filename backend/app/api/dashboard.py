@@ -144,6 +144,16 @@ async def get_dashboard_stats(
     except Exception:
         monthly_email_stats = []
 
+    # 已回复数
+    total_emails_replied = (await db.execute(
+        select(func.count(SendLog.id)).select_from(SendLog).join(
+            EmailCampaign, SendLog.campaign_id == EmailCampaign.id
+        ).where(
+            EmailCampaign.tenant_id == tenant_id,
+            SendLog.status == "replied",
+        )
+    )).scalar() or 0
+
     return {
         # ICP
         "total_icps": total_icps,
@@ -164,14 +174,7 @@ async def get_dashboard_stats(
         # 邮件 (Phase 6)
         "total_emails_sent": total_emails_sent,
         "total_emails_opened": total_emails_opened,
-        "total_emails_replied": (await db.execute(
-            select(func.count(SendLog.id)).select_from(SendLog).join(
-                EmailCampaign, SendLog.campaign_id == EmailCampaign.id
-            ).where(
-                EmailCampaign.tenant_id == tenant_id,
-                SendLog.status == "replied",
-            )
-        )).scalar() or 0,
+        "total_emails_replied": total_emails_replied,
         "open_rate": open_rate,
         "reply_rate": total_emails_replied / total_emails_sent if total_emails_sent > 0 else 0.0,
         "monthly_email_stats": monthly_email_stats,

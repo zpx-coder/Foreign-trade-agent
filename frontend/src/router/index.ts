@@ -151,8 +151,13 @@ const router = createRouter({
 });
 
 // ── 全局路由守卫 ──
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore();
+
+  // 先恢复会话（页面刷新后），消除与 App.vue 异步初始化的竞态
+  if (!authStore.sessionRestored) {
+    await authStore.restoreSession()
+  }
 
   // 公开路由（登录/注册页）
   if (to.meta.guest) {

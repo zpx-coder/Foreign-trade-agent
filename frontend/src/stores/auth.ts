@@ -120,6 +120,29 @@ export const useAuthStore = defineStore("auth", () => {
     return false;
   }
 
+  // ── 会话恢复（页面刷新后） ──
+  const sessionRestored = ref(false)
+
+  async function restoreSession() {
+    if (sessionRestored.value) return
+    try {
+      const isAdminPath = window.location.pathname.startsWith("/admin")
+      const adminToken = localStorage.getItem("admin_access_token")
+      const userToken = localStorage.getItem("access_token")
+
+      if (isAdminPath && adminToken) {
+        restoreAdminSession()
+      } else if (userToken) {
+        await fetchMe()
+      }
+      // 无 token：无需恢复
+    } catch {
+      // fetchMe/restoreAdminSession 内部已处理清理
+    } finally {
+      sessionRestored.value = true
+    }
+  }
+
   // ── 退出 ──
   function logout() {
     user.value = null;
@@ -137,6 +160,7 @@ export const useAuthStore = defineStore("auth", () => {
   return {
     user, tenant, permissions, admin,
     isAuthenticated, isAdminAuthenticated, userRole, canManageMembers,
-    login, register, adminLogin, fetchMe, restoreAdminSession, logout, adminLogout,
+    login, register, adminLogin, fetchMe, restoreAdminSession, restoreSession, sessionRestored,
+    logout, adminLogout,
   };
 });

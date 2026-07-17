@@ -253,7 +253,7 @@ function updateStep() {
 
 async function loadStats() {
   try {
-    const { data } = await api.get("/dashboard/stats");
+    const { data } = await api.get("/dashboard/stats", { silent: true });
     stats.value = { ...stats.value, ...data };
   } catch { /* dashboard not critical */ }
   updateStep();
@@ -261,9 +261,9 @@ async function loadStats() {
 
 async function loadEnterpriseStatus() {
   try {
-    await api.get("/enterprise");
+    await api.get("/enterprise", { silent: true });
     enterpriseDone.value = true;
-  } catch { /* 404 */ }
+  } catch { /* 404 — 尚未填写企业资料 */ }
   updateStep();
 }
 

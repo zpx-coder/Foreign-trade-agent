@@ -1,5 +1,5 @@
 <template>
-  <div v-if="appReady" class="app-root">
+  <div v-if="authStore.sessionRestored" class="app-root">
     <router-view />
   </div>
   <div v-else class="app-loading">
@@ -21,35 +21,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
 import { useAuthStore } from "@/stores/auth";
 
-const appReady = ref(false);
-
-(async () => {
-  const authStore = useAuthStore();
-
-  // 根据当前路径优先恢复对应会话
-  const isAdminPath = window.location.pathname.startsWith("/admin");
-  const adminToken = localStorage.getItem("admin_access_token");
-
-  if (isAdminPath && adminToken) {
-    // 管理后台路径：从 localStorage 恢复管理员会话
-    authStore.restoreAdminSession();
-  } else {
-    // 用户端路径：恢复用户会话
-    const userToken = localStorage.getItem("access_token");
-    if (userToken) {
-      try {
-        await authStore.fetchMe();
-      } catch {
-        // fetchMe 内部已处理 401/403 登出
-      }
-    }
-  }
-
-  appReady.value = true;
-})();
+const authStore = useAuthStore();
 </script>
 
 <style scoped>

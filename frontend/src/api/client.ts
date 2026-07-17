@@ -2,6 +2,13 @@ import axios from "axios";
 import { ElMessage } from "element-plus";
 import { getErrorMessage } from "@/utils/errors";
 
+// 扩展 axios 请求配置，支持静默模式（不弹出错误提示）
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    silent?: boolean;
+  }
+}
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
   timeout: 30000,
@@ -35,6 +42,11 @@ api.interceptors.response.use(
     const hasUserToken = !!localStorage.getItem("access_token");
     const hasAdminToken = !!localStorage.getItem("admin_access_token");
     const isAdminPath = window.location.pathname.startsWith("/admin");
+
+    // 标记为静默的请求（如后台自动刷新、非关键数据加载）：不弹 toast
+    if (error.config?.silent) {
+      return Promise.reject(error);
+    }
 
     // 登录/注册等认证接口：由页面自行处理错误展示，拦截器不弹 toast
     if (isAuthEndpoint) {

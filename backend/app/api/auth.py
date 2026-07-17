@@ -94,7 +94,9 @@ async def login(data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
 
     # 获取租户
     tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
-    tenant = tenant_result.scalar_one()
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="企业不存在")
 
     if tenant.status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="企业账户已被停用")
@@ -161,7 +163,9 @@ async def refresh_token(data: RefreshRequest, db: AsyncSession = Depends(get_db)
 async def get_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """获取当前登录用户信息"""
     tenant_result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
-    tenant = tenant_result.scalar_one()
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="企业不存在")
 
     # 角色 → 权限列表
     permission_map = {
