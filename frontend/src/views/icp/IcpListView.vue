@@ -50,15 +50,29 @@
       <EmptyState v-else-if="!icpList.length" description="暂无客户画像" action-text="创建第一个画像" @action="$router.push('/app/icps/create')" />
       <template v-else>
         <el-table :data="icpList" stripe @row-click="goDetail">
-          <el-table-column prop="name" label="画像名称" min-width="240">
+          <el-table-column prop="name" label="画像名称" min-width="200">
             <template #default="{ row }">
               <span class="icp-name">{{ row.name }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="status" label="状态" width="120">
+          <el-table-column label="目标地区" width="110">
+            <template #default="{ row }">{{ row.target_region || "—" }}</template>
+          </el-table-column>
+          <el-table-column label="目标行业" width="110">
+            <template #default="{ row }">{{ row.target_industry || "—" }}</template>
+          </el-table-column>
+          <el-table-column label="公司规模" width="140">
+            <template #default="{ row }">
+              {{ formatCompanySize(row.company_size) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="预算" width="140">
+            <template #default="{ row }">{{ row.customer_budget || "—" }}</template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }"><StatusBadge :status="row.status" /></template>
           </el-table-column>
-          <el-table-column label="创建时间" width="180">
+          <el-table-column label="创建时间" width="160">
             <template #default="{ row }">{{ new Date(row.created_at).toLocaleString("zh-CN") }}</template>
           </el-table-column>
           <el-table-column label="操作" width="140" fixed="right">
@@ -135,6 +149,11 @@ async function loadData() {
 
 function handleFilter() { page.value = 1; loadData(); }
 function goDetail(row: IcpItem) { router.push(`/app/icps/${row.id}`); }
+function formatCompanySize(val: string[] | string | null | undefined) {
+  if (!val) return "—";
+  if (Array.isArray(val)) return val.join("、") || "—";
+  return val || "—";
+}
 
 async function handleDelete(row: IcpItem) {
   try {

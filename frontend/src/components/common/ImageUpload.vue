@@ -30,6 +30,7 @@
       ref="fileInputRef"
       type="file"
       :accept="accept"
+      multiple
       style="display: none"
       @change="handleFileChange"
     />
@@ -73,38 +74,55 @@ function triggerUpload() {
 
 async function handleFileChange(e: Event) {
   const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-
-  // 客户端预校验
-  if (!file.type.startsWith("image/")) {
-    ElMessage.error("请选择图片文件");
-    return;
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    ElMessage.error("图片大小不能超过 5MB");
-    return;
-  }
+  const files = input.files;
+  if (!files || files.length === 0) return;
 
   uploading.value = true;
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-    const { data } = await api.post(props.uploadUrl, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+  const results: string[] = [];
+  const errors: string[] = [];
 
-    const newUrl = data.url || data.logo_url;
-    if (newUrl) {
-      const updated = [...props.modelValue, newUrl];
-      emit("update:modelValue", updated);
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+
+    // 客户端预校验
+    if (!file.type.startsWith("image/")) {
+      errors.push(`${file.name}: 请选择图片文件`);
+      continue;
     }
-  } catch {
-    // 错误由拦截器处理
-  } finally {
-    uploading.value = false;
-    // 重置 input 以允许重复上传同一文件
-    if (input) input.value = "";
+    if (file.size > 5 * 1024 * 1024) {
+      errors.push(`${file.name}: 图片大小超过 5MB`);
+      continue;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post(props.uploadUrl, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const newUrl = data.url || data.logo_url;
+      if (newUrl) {
+        results.push(newUrl);
+      }
+    } catch {
+      errors.push(`${file.name}: 上传失败`);
+    }
+  }
+
+  uploading.value = false;
+  // 重置 input 以允许重复上传同一文件
+  if (input) input.value = "";
+
+  if (results.length > 0) {
+    const updated = [...props.modelValue, ...results];
+    emit("update:modelValue", updated);
+  }
+
+  if (errors.length > 0) {
+    ElMessage.error(errors.slice(0, 3).join("；"));
+  } else if (results.length > 0) {
+    ElMessage.success(`已上传 ${results.length} 张图片`);
   }
 }
 

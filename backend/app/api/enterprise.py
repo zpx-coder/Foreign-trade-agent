@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import get_db
 from app.core.auth import get_current_user
 from app.models.user import User
+from app.models.tenant import Tenant
 from app.models.enterprise import EnterpriseProfile
 from app.schemas.enterprise import EnterpriseUpdateRequest, EnterpriseResponse
 from sqlalchemy.orm.attributes import flag_modified
@@ -25,7 +26,7 @@ async def get_enterprise(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取当前租户的企业资料"""
+    """获取当前租户的企业资料。首次访问时自动创建并填入注册时的企业名称。"""
     result = await db.execute(
         select(EnterpriseProfile).where(
             EnterpriseProfile.tenant_id == current_user.tenant_id
@@ -33,7 +34,19 @@ async def get_enterprise(
     )
     profile = result.scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=404, detail="企业资料未填写")
+        # v1.2：旧租户（v1.2 前注册）首次访问时自动创建，企业名称取租户名
+        tenant_result = await db.execute(
+            select(Tenant).where(Tenant.id == current_user.tenant_id)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        profile = EnterpriseProfile(
+            tenant_id=current_user.tenant_id,
+            company_name=tenant.name if tenant else "",
+            country="中国",
+        )
+        db.add(profile)
+        await db.commit()
+        await db.refresh(profile)
     return profile
 
 

@@ -33,44 +33,103 @@
             </el-col>
             <el-col :span="12">
               <el-form-item label="公司规模">
-                <el-select v-model="form.company_size" placeholder="请选择" style="width: 100%">
-                  <el-option label="小型企业 (1-50人)" value="小型企业 (1-50人)" />
-                  <el-option label="中型企业 (50-200人)" value="中型企业 (50-200人)" />
-                  <el-option label="大型企业 (200-1000人)" value="大型企业 (200-1000人)" />
-                  <el-option label="超大型企业 (1000人+)" value="超大型企业 (1000人+)" />
+                <el-select v-model="form.company_size" multiple placeholder="请选择（可多选）" style="width: 100%">
+                  <el-option label="小型企业 (1-50人)" value="小型企业（1-50人）" />
+                  <el-option label="中型企业 (50-200人)" value="中型企业（50-200人）" />
+                  <el-option label="大型企业 (200-1000人)" value="大型企业（200-1000人）" />
+                  <el-option label="超大型企业 (1000人+)" value="超大型企业（1000人+）" />
                 </el-select>
               </el-form-item>
             </el-col>
           </el-row>
         </template>
 
-        <!-- Step 1: 产品信息 -->
+        <!-- Step 1: 产品信息（v1.3：关联产品列表） -->
         <template v-if="step === 1">
-          <el-row :gutter="24">
-            <el-col :span="12">
-              <el-form-item label="产品品类">
-                <el-input v-model="form.product_category" placeholder="如：蓝牙耳机、智能穿戴" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="价格区间">
-                <el-input v-model="form.product_price_range" placeholder="如：$15-50 / 件" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="产品特点 / 优势">
-            <el-input v-model="form.product_features" type="textarea" :rows="3" placeholder="如：ANC主动降噪、IPX5防水、支持无线充电" />
+          <el-form-item label="选择产品">
+            <ProductSelector
+              v-model="form.product_ids"
+              @update:productsInline="handleProductsInline"
+            />
           </el-form-item>
         </template>
 
-        <!-- Step 2: 客户特征 -->
+        <!-- Step 2: 采购商特征（v1.3：外贸采购商核心特征） -->
         <template v-if="step === 2">
           <el-row :gutter="24">
             <el-col :span="12">
-              <el-form-item label="客户预算">
-                <el-input v-model="form.customer_budget" placeholder="如：$5,000-50,000 / 批" />
+              <el-form-item label="买家类型">
+                <el-select v-model="form.buyer_type" placeholder="请选择买家类型" style="width: 100%" clearable>
+                  <el-option label="进口商" value="进口商" />
+                  <el-option label="品牌商/品牌贴牌" value="品牌商/品牌贴牌" />
+                  <el-option label="批发商" value="批发商" />
+                  <el-option label="经销商/代理商" value="经销商/代理商" />
+                  <el-option label="零售商/连锁店" value="零售商/连锁店" />
+                  <el-option label="电商卖家" value="电商卖家" />
+                </el-select>
               </el-form-item>
             </el-col>
+            <el-col :span="12">
+              <el-form-item label="采购频次">
+                <el-select v-model="form.procurement_frequency" placeholder="请选择采购频次" style="width: 100%" clearable>
+                  <el-option label="高频（每月均有采购）" value="高频（每月）" />
+                  <el-option label="中等（每季度采购）" value="中等（每季度）" />
+                  <el-option label="低频（半年至一年一次）" value="低频（半年至一年）" />
+                  <el-option label="不稳定/按需采购" value="不稳定/按需" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="24">
+            <el-col :span="12">
+              <el-form-item label="客户单批次采购预算 (USD)">
+                <div class="price-range-row">
+                  <el-input-number v-model="form.customer_budget_min" :precision="0" :min="0" :controls="false" placeholder="最低预算" style="width: 130px" />
+                  <span class="price-sep">—</span>
+                  <el-input-number v-model="form.customer_budget_max" :precision="0" :min="0" :controls="false" placeholder="最高预算" style="width: 130px" />
+                  <span class="price-unit">USD</span>
+                </div>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="客户目标采购单价 (USD)">
+                <div class="price-range-row">
+                  <el-input-number v-model="form.product_price_min" :precision="2" :min="0" :controls="false" placeholder="最低单价" style="width: 130px" />
+                  <span class="price-sep">—</span>
+                  <el-input-number v-model="form.product_price_max" :precision="2" :min="0" :controls="false" placeholder="最高单价" style="width: 130px" />
+                  <span class="price-unit">USD</span>
+                </div>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="24">
+            <el-col :span="12">
+              <el-form-item label="主要采购渠道">
+                <el-select v-model="form.sourcing_channels" multiple placeholder="可多选" style="width: 100%">
+                  <el-option label="B2B平台（阿里巴巴/环球资源等）" value="B2B平台" />
+                  <el-option label="行业展会/广交会等" value="行业展会" />
+                  <el-option label="同行推荐/口碑介绍" value="同行推荐" />
+                  <el-option label="搜索引擎/独立站搜索" value="搜索引擎" />
+                  <el-option label="社交媒体（LinkedIn等）" value="社交媒体" />
+                  <el-option label="海关数据直投" value="海关数据" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="关键决策因素">
+                <el-select v-model="form.key_decision_factors" multiple placeholder="可多选" style="width: 100%">
+                  <el-option label="价格竞争力" value="价格" />
+                  <el-option label="产品质量/品控" value="质量" />
+                  <el-option label="交期稳定性" value="交期" />
+                  <el-option label="认证资质（CE/FDA等）" value="认证资质" />
+                  <el-option label="售后/退换货服务" value="售后服务" />
+                  <el-option label="付款条件（L/C、赊销等）" value="付款条件" />
+                  <el-option label="设计/定制能力" value="设计能力" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="24">
             <el-col :span="12">
               <el-form-item label="决策者角色">
                 <el-input v-model="form.decision_makers" placeholder="如：采购经理、产品总监、CEO" />
@@ -78,7 +137,7 @@
             </el-col>
           </el-row>
           <el-form-item label="客户痛点">
-            <el-input v-model="form.pain_points" type="textarea" :rows="3" placeholder="如：现有供应商交期不稳定、质量参差不齐" />
+            <el-input v-model="form.pain_points" type="textarea" :rows="3" placeholder="如：现有供应商交期不稳定、质量参差不齐、起订量过高" />
           </el-form-item>
           <el-form-item label="补充说明">
             <el-input v-model="form.additional_notes" type="textarea" :rows="2" placeholder="其他需要 AI 了解的信息（选填）" />
@@ -89,9 +148,12 @@
       <div class="step-actions">
         <el-button v-if="step > 0" @click="step--">上一步</el-button>
         <el-button v-if="step < 2" type="primary" @click="nextStep">下一步</el-button>
-        <el-button v-if="step === 2" type="primary" size="large" :loading="saving" @click="handleCreateAndGenerate">
-          <el-icon><MagicStick /></el-icon>保存并生成画像
-        </el-button>
+        <template v-if="step === 2">
+          <el-button size="large" :loading="saving" @click="handleSaveDraft">保存草稿</el-button>
+          <el-button type="primary" size="large" :loading="saving" @click="handleCreateAndGenerate">
+            <el-icon><MagicStick /></el-icon>保存并生成画像
+          </el-button>
+        </template>
       </div>
     </el-card>
 
@@ -115,37 +177,99 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from "vue";
+import { ref, reactive, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { MagicStick, ArrowRight } from "@element-plus/icons-vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 import StreamingOutput from "@/components/ai/StreamingOutput.vue";
+import ProductSelector from "./components/ProductSelector.vue";
 import { useSSE } from "@/composables/useSSE";
 import { useIcpStore } from "@/stores/icp";
+import type { ProductInline } from "@/stores/icp";
 
 const router = useRouter();
 const icpStore = useIcpStore();
 const step = ref(0);
 const saving = ref(false);
 
-const form = reactive({
+const form = reactive<Record<string, unknown>>({
   name: "",
   target_industry: "",
   target_region: "",
-  company_size: "",
-  product_category: "",
-  product_price_range: "",
-  product_features: "",
-  customer_budget: "",
+  company_size: [] as string[],
+  product_ids: [] as string[],
+  product_price_min: undefined as number | undefined,
+  product_price_max: undefined as number | undefined,
+  customer_budget_min: undefined as number | undefined,
+  customer_budget_max: undefined as number | undefined,
+  buyer_type: "",
+  procurement_frequency: "",
+  sourcing_channels: [] as string[],
+  key_decision_factors: [] as string[],
   pain_points: "",
   decision_makers: "",
   additional_notes: "",
 });
 
+// v1.3: 产品内联数据（供 AI prompt 使用）
+const productsInlineData = ref<ProductInline[]>([]);
+
+function handleProductsInline(products: ProductInline[]) {
+  productsInlineData.value = products;
+}
+
 function nextStep() {
-  if (step.value === 0 && !form.name.trim()) { ElMessage.warning("请输入画像名称"); return; }
+  if (step.value === 0 && !(form.name as string).trim()) {
+    ElMessage.warning("请输入画像名称");
+    return;
+  }
   step.value++;
+}
+
+// ── 构建输入数据 ──
+function buildInputData(): Record<string, unknown> {
+  const inputData: Record<string, unknown> = {
+    target_industry: form.target_industry || null,
+    target_region: form.target_region || null,
+    company_size: (form.company_size as string[]).length > 0 ? form.company_size : null,
+    product_ids: (form.product_ids as string[]).length > 0 ? form.product_ids : null,
+    product_price_min: form.product_price_min ?? null,
+    product_price_max: form.product_price_max ?? null,
+    customer_budget_min: form.customer_budget_min ?? null,
+    customer_budget_max: form.customer_budget_max ?? null,
+    buyer_type: form.buyer_type || null,
+    procurement_frequency: form.procurement_frequency || null,
+    sourcing_channels: (form.sourcing_channels as string[]).length > 0 ? form.sourcing_channels : null,
+    key_decision_factors: (form.key_decision_factors as string[]).length > 0 ? form.key_decision_factors : null,
+    pain_points: form.pain_points || null,
+    decision_makers: form.decision_makers || null,
+    additional_notes: form.additional_notes || null,
+  };
+  // 产品内联快照
+  if (productsInlineData.value.length > 0) {
+    inputData._products_inline = productsInlineData.value;
+  }
+  return inputData;
+}
+
+// ── 保存草稿 ──
+async function handleSaveDraft() {
+  if (!(form.name as string).trim()) {
+    ElMessage.warning("请输入画像名称");
+    return;
+  }
+  saving.value = true;
+  try {
+    const inputData = buildInputData();
+    await icpStore.createDraft({ name: form.name as string, ...inputData } as any);
+    ElMessage.success("草稿已保存");
+    router.push("/app/icps");
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.detail || "保存失败");
+  } finally {
+    saving.value = false;
+  }
 }
 
 // ── AI 生成 ──
@@ -167,11 +291,15 @@ watch(isStreaming, (v, prev) => {
 });
 
 async function handleCreateAndGenerate() {
-  if (!form.name.trim()) { ElMessage.warning("请输入画像名称"); return; }
+  if (!(form.name as string).trim()) {
+    ElMessage.warning("请输入画像名称");
+    return;
+  }
   saving.value = true;
   try {
-    const { name, ...inputData } = form;
-    const icp = await icpStore.create({ name, ...inputData });
+    const inputData = buildInputData();
+    const { name, ...rest } = { name: form.name as string, ...inputData };
+    const icp = await icpStore.create({ name, ...rest } as any);
     createdId = icp.id;
     showGeneratePanel.value = true;
     completed.value = false;
@@ -235,5 +363,24 @@ function goDetail() {
   font-size: 16px;
   font-weight: 700;
   color: #0f172a;
+}
+
+// ── 价格区间行 ──
+.price-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.price-sep {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.price-unit {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 </style>

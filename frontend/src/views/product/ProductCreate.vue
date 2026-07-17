@@ -26,10 +26,23 @@ const router = useRouter();
 const formRef = ref<InstanceType<typeof ProductForm>>();
 const saving = ref(false);
 
-async function handleCreate(formData: Record<string, unknown>) {
+async function handleCreate(formData: Record<string, unknown>, files?: File[]) {
   saving.value = true;
   try {
-    await api.post("/products", formData);
+    const { data } = await api.post("/products", formData);
+    const productId = data.id as string;
+
+    // 上传本地图片（如果有）
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        await api.post(`/products/${productId}/images`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+    }
+
     ElMessage.success("产品创建成功");
     router.push("/app/products");
   } catch (err: any) {

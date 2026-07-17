@@ -52,18 +52,29 @@ ICP_USER_PROMPT_TEMPLATE = """请根据以下信息生成理想客户画像：
 - 公司规模：{company_size}
 
 ## 产品/服务信息
-- 产品品类：{product_category}
-- 价格区间：{product_price_range}
-- 产品特点/优势：{product_features}
+{products_section}
 
-## 理想客户特征
-- 客户预算：{customer_budget}
-- 客户痛点：{pain_points}
+## 采购商核心特征
+- 买家类型：{buyer_type}
+- 单批次采购预算：{customer_budget}
+- 采购频次：{procurement_frequency}
+- 主要采购渠道：{sourcing_channels}
+- 关键决策因素：{key_decision_factors}
 - 决策者角色：{decision_makers}
+- 客户痛点：{pain_points}
 
 ## 补充说明
 {additional_notes}
 """
+
+
+def _fmt_list_or_str(value) -> str:
+    """格式化列表或字符串为 prompt 可读文本"""
+    if isinstance(value, list):
+        return "、".join(value) if value else "未指定"
+    if isinstance(value, str) and value.strip():
+        return value
+    return "未指定"
 
 
 class IcpGenerator:
@@ -75,21 +86,88 @@ class IcpGenerator:
         self._output: Optional[Dict[str, Any]] = None
 
     def _build_user_prompt(self, input_data: dict) -> str:
-        """根据输入数据构建 user prompt"""
-        defaults = {
-            "target_industry": "未指定",
-            "target_region": "未指定",
-            "company_size": "未指定",
-            "product_category": "未指定",
-            "product_price_range": "未指定",
-            "product_features": "未指定",
-            "customer_budget": "未指定",
-            "pain_points": "未指定",
-            "decision_makers": "未指定",
-            "additional_notes": "无",
+        """根据输入数据构建 user prompt（v1.3 适配结构化字段）"""
+        # ── 公司规模（v1.3：支持数组）──
+        company_size = input_data.get("company_size")
+        if isinstance(company_size, list):
+            company_size = "、".join(company_size) if company_size else "未指定"
+        elif isinstance(company_size, str) and company_size.strip():
+            company_size = company_size
+        else:
+            company_size = "未指定"
+
+        # ── 产品信息（v1.3：优先使用 product_ids 内联数据，其次结构化价格，最后回退旧字段）──
+        products_inline = input_data.get("_products_inline")  # 前端快照传入
+        if products_inline and isinstance(products_inline, list):
+            lines = []
+            for p in products_inline:
+                name = p.get("name", "未命名")
+                desc = p.get("description", "")
+                price = p.get("price_usd")
+                moq = p.get("moq")
+                category = p.get("category", "")
+                hs_code = p.get("hs_code", "")
+                parts = [f"- 产品：{name}"]
+                if category:
+                    parts.append(f"  品类：{category}")
+                if desc:
+                    parts.append(f"  描述：{desc}")
+                if price is not None:
+                    parts.append(f"  单价：${price} USD")
+                if moq is not None:
+                    parts.append(f"  起订量：{moq}")
+                if hs_code:
+                    parts.append(f"  HS编码：{hs_code}")
+                lines.append("\n".join(parts))
+            products_section = "\n\n".join(lines)
+        else:
+            # 结构化价格
+            price_min = input_data.get("product_price_min")
+            price_max = input_data.get("product_price_max")
+            price_range = input_data.get("product_price_range", "未指定")
+            if price_min is not None and price_max is not None:
+                price_range = f"${price_min} — ${price_max} USD"
+            elif price_min is not None:
+                price_range = f"≥ ${price_min} USD"
+            elif price_max is not None:
+                price_range = f"≤ ${price_max} USD"
+
+            old_category = input_data.get("product_category", "未指定") or "未指定"
+            old_features = input_data.get("product_features", "未指定") or "未指定"
+            products_section = (
+                f"- 产品品类：{old_category}\n"
+                f"- 价格区间：{price_range}\n"
+                f"- 产品特点/优势：{old_features}"
+            )
+
+        # ── 客户预算（v1.3：结构化 min/max 优先）──
+        budget_min = input_data.get("customer_budget_min")
+        budget_max = input_data.get("customer_budget_max")
+        if budget_min is not None and budget_max is not None:
+            customer_budget = f"${budget_min:,.0f} — ${budget_max:,.0f} USD"
+        elif budget_min is not None:
+            customer_budget = f"≥ ${budget_min:,.0f} USD"
+        elif budget_max is not None:
+            customer_budget = f"≤ ${budget_max:,.0f} USD"
+        else:
+            customer_budget = input_data.get("customer_budget", "未指定") or "未指定"
+
+        data = {
+            "target_industry": input_data.get("target_industry") or "未指定",
+            "target_region": input_data.get("target_region") or "未指定",
+            "company_size": company_size,
+            "products_section": products_section,
+            "customer_budget": customer_budget,
+            # v1.3 采购商核心特征
+            "buyer_type": input_data.get("buyer_type") or "未指定",
+            "procurement_frequency": input_data.get("procurement_frequency") or "未指定",
+            "sourcing_channels": _fmt_list_or_str(input_data.get("sourcing_channels")),
+            "key_decision_factors": _fmt_list_or_str(input_data.get("key_decision_factors")),
+            "pain_points": input_data.get("pain_points") or "未指定",
+            "decision_makers": input_data.get("decision_makers") or "未指定",
+            "additional_notes": input_data.get("additional_notes") or "无",
         }
-        data = {**defaults, **{k: (v or "未指定") for k, v in input_data.items()}}
-        # 转义花括号防止 str.format() 崩溃（用户输入可能含 { }）
+        # 转义花括号防止 str.format() 崩溃
         safe_data = {k: str(v).replace("{", "{{").replace("}", "}}") for k, v in data.items()}
         return ICP_USER_PROMPT_TEMPLATE.format(**safe_data)
 

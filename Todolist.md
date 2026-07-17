@@ -54,3 +54,17 @@
 - **可复用组件**：新增 ImageUpload.vue（多图上传，v-model 模式，文件类型/大小客户端校验）。
 - **数据库迁移**：Alembic 迁移 `779370b0cfe1` 已执行（新增 10 个企业字段 + 1 个产品字段）。
 - **前端类型检查**：`vue-tsc --noEmit` 零错误通过。
+
+## 2026-07-17 — v1.3 PRD
+
+- **PRD 升级**：[docs/prd.md](docs/prd.md) 升级至 v1.3，新增 §13 v1.3 变更记录（客户画像模块优化：公司规模多选、产品关联产品列表、价格结构化 USD、草稿保存、列表字段扩展、二次编辑重新生成）。
+
+## 2026-07-17 — v1.3 开发
+
+- **需求 1 — 公司规模多选**：`company_size` 从单选 `str` 改为多选 `List[str]`，后端 Schema 添加 `field_validator` 兼容旧数据，前端 `el-select` 添加 `multiple`。
+- **需求 2 — 产品关联产品列表**：`IcpInputData` 新增 `product_ids`，新增 [ProductSelector.vue](frontend/src/views/icp/components/ProductSelector.vue) 可复用组件（多选+卡片展示+内联快照），AI Prompt 模板适配产品内联数据（`_products_inline`）。
+- **需求 3 — 价格结构化 USD**：废弃自由文本价格字段，新增 `product_price_min/max` 和 `customer_budget_min/max`，前端 `el-input-number` + 固定 "USD" 标签，后端 prompt 构建时格式化显示。
+- **需求 4 — 保存草稿**：[IcpCreate.vue](frontend/src/views/icp/IcpCreate.vue) Step 2 新增「保存草稿」按钮，调用 `createDraft()` 后跳转列表页。
+- **需求 5 — 列表新增 4 字段**：`IcpListItem` Schema 新增 `target_region`/`target_industry`/`company_size`/`customer_budget`，API 列表端点从 `input_data` 提取填充，前端表格新增 4 列。
+- **需求 6 — 二次编辑重新生成**：[IcpDetail.vue](frontend/src/views/icp/IcpDetail.vue) 新增「编辑输入信息」按钮（内联编辑模式）、`completed` 状态重新生成（含覆盖确认弹窗）、Store 新增 `update()` action。
+- **验证**：TypeScript `vue-tsc --noEmit` 零错误，Python 3 文件语法检查通过。

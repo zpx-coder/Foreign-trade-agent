@@ -64,6 +64,7 @@
     </el-row>
 
     <el-form-item label="产品图片" prop="images">
+      <!-- 已有产品：即时上传 -->
       <template v-if="productId">
         <ImageUpload
           v-model="form.images"
@@ -73,23 +74,37 @@
           hint="支持 PNG/JPEG/GIF/WebP，单张不超过 5MB"
         />
       </template>
+      <!-- 新建产品：本地预选 + URL 输入，提交时一并上传 -->
       <template v-else>
-        <div class="images-hint">
+        <div class="images-create-mode">
           <el-input
             v-model="imageUrlInput"
-            placeholder="输入图片 URL 地址，或保存产品后再上传本地图片"
+            placeholder="输入图片 URL 地址，按回车添加"
             maxlength="512"
             @blur="addImageUrl"
             @keyup.enter="addImageUrl"
           />
-          <div v-if="form.images.length" class="images-preview">
-            <img
-              v-for="(url, idx) in form.images"
-              :key="idx"
-              :src="url"
-              class="images-thumb"
-            />
+          <div v-if="form.images.length || localPreviews.length" class="images-preview-grid">
+            <!-- URL 图片 -->
+            <div v-for="(url, idx) in form.images" :key="'url-' + idx" class="images-preview-item">
+              <img :src="url" class="images-preview-img" />
+              <div class="images-preview-actions">
+                <el-button circle size="small" type="danger" :icon="Delete" @click="removeUrlImage(idx)" />
+              </div>
+            </div>
+            <!-- 本地文件预览 -->
+            <div v-for="(preview, idx) in localPreviews" :key="'local-' + idx" class="images-preview-item">
+              <img :src="preview" class="images-preview-img" />
+              <div class="images-preview-actions">
+                <el-button circle size="small" type="danger" :icon="Delete" @click="removeLocalFile(idx)" />
+              </div>
+            </div>
           </div>
+          <div v-if="totalImageCount < 6" class="images-create-trigger" @click="triggerLocalUpload">
+            <el-icon :size="22"><Plus /></el-icon>
+            <span>上传本地图片（PNG/JPEG/GIF/WebP，≤5MB）</span>
+          </div>
+          <input ref="localFileInputRef" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple style="display: none" @change="handleLocalFileChange" />
         </div>
       </template>
     </el-form-item>
@@ -108,8 +123,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from "vue";
-import { type FormInstance, type FormRules } from "element-plus";
+import { ref, reactive, computed, watch, onBeforeUnmount } from "vue";
+import { ElMessage, type FormInstance, type FormRules } from "element-plus";
+import { Delete, Plus } from "@element-plus/icons-vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 
 interface ProductFormData {
@@ -150,7 +166,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  submit: [data: Record<string, unknown>];
+  submit: [data: Record<string, unknown>, files?: File[]];
   cancel: [];
 }>();
 
@@ -169,6 +185,63 @@ const form = reactive<ProductFormData>({
 });
 
 const imageUrlInput = ref("");
+
+// ── 本地文件预选（新建产品时使用，提交后批量上传）──
+const pendingFiles = ref<File[]>([]);
+const localPreviews = ref<string[]>([]);
+const localFileInputRef = ref<HTMLInputElement>();
+
+const totalImageCount = computed(() => form.images.length + localPreviews.value.length);
+
+function triggerLocalUpload() {
+  localFileInputRef.value?.click();
+}
+
+function handleLocalFileChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = input.files;
+  if (!files || files.length === 0) return;
+
+  const errors: string[] = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+
+    if (!file.type.startsWith("image/")) {
+      errors.push(`${file.name}: 请选择图片文件`);
+      continue;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      errors.push(`${file.name}: 图片大小超过 5MB`);
+      continue;
+    }
+
+    pendingFiles.value.push(file);
+    localPreviews.value.push(URL.createObjectURL(file));
+  }
+
+  // 重置 input 以允许重复选择同一文件
+  if (input) input.value = "";
+
+  if (errors.length > 0) {
+    ElMessage.error(errors.slice(0, 3).join("；"));
+  }
+}
+
+function removeLocalFile(idx: number) {
+  pendingFiles.value.splice(idx, 1);
+  URL.revokeObjectURL(localPreviews.value[idx]);
+  localPreviews.value.splice(idx, 1);
+}
+
+function removeUrlImage(idx: number) {
+  form.images.splice(idx, 1);
+}
+
+// 清理 blob URL 防止内存泄漏
+onBeforeUnmount(() => {
+  localPreviews.value.forEach((url) => URL.revokeObjectURL(url));
+});
 
 // 初始化表单数据
 watch(
@@ -222,7 +295,9 @@ async function handleSubmit() {
     if (submitData[key] === "") submitData[key] = null;
   });
 
-  emit("submit", submitData);
+  // 新建产品时附带本地文件，由父组件在创建后上传
+  const files = props.productId ? undefined : pendingFiles.value.length > 0 ? [...pendingFiles.value] : undefined;
+  emit("submit", submitData, files);
 }
 </script>
 
@@ -248,22 +323,62 @@ export default {
   }
 }
 
-.images-hint {
+// ── 新建模式：本地图片 + URL 输入 ──
+.images-create-mode {
   width: 100%;
 }
 
-.images-preview {
+.images-preview-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 10px;
+  margin-top: 10px;
 }
 
-.images-thumb {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 6px;
+.images-preview-item {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: 8px;
+  overflow: hidden;
   border: 1px solid #e2e8f0;
+
+  &:hover .images-preview-actions {
+    opacity: 1;
+  }
+}
+
+.images-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.images-preview-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.images-create-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 16px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 13px;
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.04);
+  }
 }
 </style>

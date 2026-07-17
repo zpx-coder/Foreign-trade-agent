@@ -18,6 +18,7 @@ from app.schemas.icp import (
     IcpCreateRequest,
     IcpUpdateRequest,
     IcpResponse,
+    IcpListItem,
     IcpListResponse,
 )
 from app.services.ai_service import AIServiceError, get_ai_service
@@ -85,8 +86,38 @@ async def list_icps(
     )
     rows = (await db.execute(q)).scalars().all()
 
+    # v1.3: 从 input_data 提取列表显示字段
+    items = []
+    for icp in rows:
+        input_data = icp.input_data or {}
+        company_size = input_data.get("company_size")
+        if isinstance(company_size, str):
+            company_size = [company_size]
+        # 构建预算显示文本
+        budget_min = input_data.get("customer_budget_min")
+        budget_max = input_data.get("customer_budget_max")
+        if budget_min is not None and budget_max is not None:
+            budget_display = f"${budget_min:,.0f} — ${budget_max:,.0f} USD"
+        elif budget_min is not None:
+            budget_display = f"≥ ${budget_min:,.0f} USD"
+        elif budget_max is not None:
+            budget_display = f"≤ ${budget_max:,.0f} USD"
+        else:
+            budget_display = input_data.get("customer_budget")  # 回退旧字段
+        items.append(IcpListItem(
+            id=icp.id,
+            name=icp.name,
+            status=icp.status,
+            target_region=input_data.get("target_region"),
+            target_industry=input_data.get("target_industry"),
+            company_size=company_size,
+            customer_budget=budget_display,
+            created_at=icp.created_at,
+            updated_at=icp.updated_at,
+        ))
+
     return IcpListResponse(
-        items=rows,
+        items=items,
         total=total,
         page=page,
         page_size=page_size,

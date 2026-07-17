@@ -1,12 +1,12 @@
 # AI 外贸助手 — 产品需求文档 (PRD)
 
-> **版本**：v1.2 | **日期**：2026-07-17 | **状态**：一期迭代 — 企业资料增强
+> **版本**：v1.3 | **日期**：2026-07-17 | **状态**：一期迭代 — 客户画像模块优化
 >
 > 本文档定义 AI 外贸助手的产品需求，作为设计、开发、测试的基准文档。
 > 需求变更须通过 PR 评审，重大变更按 CLAUDE.md 第一章确认机制执行。
 >
-> **v1.2 说明**：本文档在 v1.1 基础上，根据 v1.2 需求列表进行了企业资料模块增强。
-> 新增与变更详见 [§12 v1.2 变更记录](#12-v12-变更记录)。
+> **v1.3 说明**：本文档在 v1.2 基础上，根据 v1.3 需求列表进行了客户画像（ICP）模块优化。
+> 新增与变更详见 [§13 v1.3 变更记录](#13-v13-变更记录)。
 
 ---
 
@@ -29,6 +29,8 @@
 9. [风险与假设](#9-风险与假设)
 10. [附录](#10-附录)
 11. [v1.1 变更记录](#11-v11-变更记录)
+12. [v1.2 变更记录](#12-v12-变更记录)
+13. [v1.3 变更记录](#13-v13-变更记录)
 
 ---
 
@@ -1137,7 +1139,7 @@ Dev Spec 规划了 8 个 Pinia Store（auth / enterprise / product / icp / custo
 | v1.0 | 2026-06-25 | 初始版本，一期 MVP 需求 | zhaopuxuan |
 | v1.1 | 2026-07-16 | Phase 0-7 实施后全面修订：SMTP 替代 Gmail OAuth、数据模型精简/扩展、API 调整、实现度总览 | zhaopuxuan |
 | v1.2 | 2026-07-17 | 企业资料模块增强：外贸字段扩展、城市下拉选择、多图上传、产品图片、注册企业名自动带入 | zhaopuxuan |
-
+| v1.3 | 2026-07-17 | 客户画像模块优化：公司规模多选、产品关联、价格结构化、草稿保存、列表字段扩展、二次编辑再生 | zhaopuxuan |
 ---
 
 ## 12. v1.2 变更记录
@@ -1253,5 +1255,356 @@ ALTER TABLE product
 | `/api/v1/enterprise/photos` | POST | 上传企业图片（type=factory|certificate），返回 URL |
 | `/api/v1/products/{id}/images` | POST | 上传产品图片，返回 URL 数组 |
 
-> **审批状态**：待评审
-> **下一步**：v1.3 规划（多渠道搜索、评分系统、邮箱验证）
+> **审批状态**：已实施
+> **下一步**：v1.3 客户画像模块优化（详见 §13）
+
+---
+
+## 13. v1.3 变更记录
+
+> 本章记录从 PRD v1.2（2026-07-17）到 v1.3（2026-07-17）期间的客户画像（ICP）模块优化。
+> 变更范围：ICP 表单交互优化、产品关联、列表字段扩展、草稿与编辑功能完善。
+
+### 13.1 需求概述
+
+v1.3 聚焦于**客户画像（ICP）模块**的 6 项优化需求：
+
+| # | 需求 | 类别 |
+|---|------|------|
+| 1 | 公司规模支持多选 | 表单优化 |
+| 2 | 产品信息关联产品管理列表 | 架构变更 |
+| 3 | 价格输入货币单位固定为美元 | 表单优化 |
+| 4 | 新增保存草稿功能 | 功能完善 |
+| 5 | 列表增加目标地区/行业/规模/预算字段 | 列表增强 |
+| 6 | 已完成画像支持二次编辑并重新 AI 生成 | 功能完善 |
+
+**关键设计决策：**
+
+| 决策项 | 选择 | 理由 |
+|--------|------|------|
+| 产品关联方式 | **完全替换为产品选择器** | 用户已确认——不再手动填写产品信息，直接从产品管理列表勾选 |
+| 价格输入格式 | **最小/最大两个数字框 + 固定 USD 标签** | 结构化输入，避免自由文本格式不一致 |
+| 重新生成策略 | **直接覆盖旧 output_data** | MVP 阶段不留版本历史，保持简洁 |
+| 编辑入口 | **详情页内联编辑** | 无需额外跳转页面，改动最小 |
+
+### 13.2 公司规模多选
+
+#### 13.2.1 现状
+
+ICP 创建表单 Step 0「目标市场」中 `company_size` 为单选下拉框，选项为：
+
+- 小型企业（1-50人）
+- 中型企业（50-200人）
+- 大型企业（200-1000人）
+- 超大型企业（1000人+）
+
+但在实际外贸场景中，企业可能同时面向多种规模的客户（如既想找中型进口商，也愿意合作大型零售商）。
+
+#### 13.2.2 变更
+
+| 维度 | v1.2 | v1.3 |
+|------|------|------|
+| 前端控件 | `el-select` 单选 | `el-select` + `multiple` 多选 |
+| Schema 类型 | `Optional[str]` | `Optional[List[str]]` |
+| 已存储旧数据 | `"中型企业（50-200人）"` | 读取时自动包装为 `["中型企业（50-200人）"]` |
+| AI Prompt | 直接传入字符串 | 以顿号连接后传入（如"小型企业（1-50人）、中型企业（50-200人）"） |
+
+#### 13.2.3 兼容性
+
+- 后端 `IcpInputData.company_size` 字段接受 `str | List[str]`，读取时统一转为 `List[str]`
+- 已有 ICP 记录的 `input_data.company_size` 若为字符串，读取时自动包装为单元素列表
+- 详情页显示时，数组以顿号连接展示
+
+### 13.3 产品信息关联产品管理列表
+
+#### 13.3.1 现状
+
+ICP 创建表单 Step 1「产品信息」包含三个自由文本字段：
+
+| 字段 | 说明 |
+|------|------|
+| `product_category` | 产品品类，如"蓝牙耳机、智能穿戴" |
+| `product_price_range` | 价格区间，如"$15-50 / 件" |
+| `product_features` | 产品特点/优势，如"ANC降噪、IPX5防水" |
+
+用户需手动输入产品信息，可能与企业资料中已维护的产品数据不一致。
+
+#### 13.3.2 变更
+
+| 维度 | v1.2 | v1.3 |
+|------|------|------|
+| 产品输入方式 | 三个自由文本字段 | **从产品管理列表多选产品** |
+| 数据存储 | 文本字段存入 `input_data` | 新增 `product_ids: List[str]` 存入 `input_data` |
+| AI Prompt | 使用用户手填的文本 | 使用选中产品的完整信息（名称、描述、价格、MOQ、HS 编码等） |
+
+#### 13.3.3 前端交互
+
+新建/编辑 ICP 表单 Step 1 重构为：
+
+1. **产品多选器**（`el-select` + `multiple` + `filterable`）：
+   - 从 `GET /api/v1/products` 获取当前租户的产品列表
+   - 支持输入过滤，显示产品名称、分类、单价
+2. **已选产品展示**：每个选中产品显示摘要卡片（缩略图、名称、分类、价格），可删除
+3. **上限**：最多选择 10 个产品
+4. **自动填充**：选中产品后，均价区间自动计算（取自产品 `price_usd`），用户仍可手动覆盖
+
+#### 13.3.4 AI Prompt 适配
+
+AI 生成时，`IcpGenerator._build_user_prompt()` 处理逻辑：
+
+```
+if product_ids 非空:
+    → 使用产品关联信息（名称、描述、价格、MOQ 等完整数据）填入 prompt 模板
+elif 旧文本字段非空（已有 ICP）:
+    → 回退到现有模板
+else:
+    → 标记为"未指定"
+```
+
+产品信息采用**快照方式**传入：前端在调用 generate 前将 `product_ids` 对应的产品完整数据嵌入 `input_data`，避免 SSE 流中持有数据库 session。
+
+#### 13.3.5 字段废弃策略
+
+| 字段 | 策略 | 说明 |
+|------|------|------|
+| `product_category` | **保留，废弃** | 旧 ICP 仍可读取，新创建 ICP 不再写入 |
+| `product_price_range` | **保留，废弃** | 被 `product_price_min`/`product_price_max` 替代 |
+| `product_features` | **保留，废弃** | 旧 ICP 仍可读取，新创建 ICP 不再写入 |
+| `product_ids` | **新增** | 存储已选产品 UUID 列表 |
+
+### 13.4 价格货币固定为美元
+
+#### 13.4.1 现状
+
+| 字段 | 当前格式 | 问题 |
+|------|----------|------|
+| `product_price_range` | 自由文本，如 "$15-50 / 件" | 格式不统一，AI 难以精确解析 |
+| `customer_budget` | 自由文本，如 "$5,000-50,000 / 批" | 同上 |
+
+#### 13.4.2 变更
+
+| 维度 | v1.2 | v1.3 |
+|------|------|------|
+| `product_price_range` | 单个自由文本 | 拆分为 `product_price_min: float` + `product_price_max: float`（USD） |
+| `customer_budget` | 单个自由文本 | 拆分为 `customer_budget_min: float` + `customer_budget_max: float`（USD） |
+| 前端控件 | `<el-input>` 文本 | 两个 `<el-input-number>` + 固定 "USD" 标签 |
+| 货币单位 | 用户自行输入 | **系统固定为美元（$ USD）** |
+
+**前端表单示例**：
+
+```
+价格区间:  [$ 15.00]  —  [$ 200.00]  USD
+客户预算:  [$ 5000]   —  [$ 50000]   USD
+```
+
+#### 13.4.3 与产品关联的联动
+
+需求 13.3（产品关联）实施后，选中产品后可自动根据产品 `price_usd` 计算价格区间：
+- `product_price_min` = 选中产品中的最低单价
+- `product_price_max` = 选中产品中的最高单价
+- 用户可手动修改覆盖
+
+#### 13.4.4 兼容性
+
+- AI Prompt 构建时优先使用新的结构化价格字段
+- 若新字段为空但旧文本字段（`product_price_range`、`customer_budget`）有值，回退使用旧字段
+- 旧字段保留在 Schema 中，不删除
+
+### 13.5 保存草稿功能
+
+#### 13.5.1 现状
+
+| 维度 | 说明 |
+|------|------|
+| 数据库 | ICP 创建时 `status` 默认为 `"draft"` ✓ |
+| 列表页 | 草稿统计卡片、草稿状态筛选 ✓ |
+| 创建页 | **仅有"保存并生成画像"按钮**，无单独保存草稿入口 |
+| 实际草稿 | 不存在——用户要么一次性完成创建+生成，要么放弃 |
+
+#### 13.5.2 变更
+
+| 维度 | 说明 |
+|------|------|
+| 创建页新增按钮 | Step 2 增加「保存草稿」按钮（secondary 样式） |
+| 保存逻辑 | 调用 `POST /api/v1/icps`（与现有逻辑相同），**不触发 SSE 生成**，跳转至列表页 |
+| 列表草稿入口 | 用户可在列表中筛选「草稿」状态，点击查看详情后编辑并生成 |
+
+#### 13.5.3 交互流程
+
+```
+新建 ICP → 填写 3 步表单 → 点击「保存草稿」
+→ POST /icps (status="draft") → 跳转至 ICP 列表页
+→ 草稿统计 +1，列表中出现新记录（状态=草稿）
+→ 点击查看详情 → 详情页显示「编辑」「重新生成」按钮
+→ 编辑完善后点击「保存并重新生成」→ 生成画像
+```
+
+### 13.6 列表新增字段
+
+#### 13.6.1 现状
+
+ICP 列表仅显示四列：
+
+| 列 | 宽度 |
+|------|------|
+| 画像名称 | 240px (min) |
+| 状态 | 120px |
+| 创建时间 | 180px |
+| 操作（查看/删除） | 140px |
+
+用户无法在列表中快速了解画像的核心参数（目标地区、行业、规模、预算）。
+
+#### 13.6.2 变更
+
+**新增列：**
+
+| 新增列 | 数据来源 | 宽度 | 空值显示 |
+|--------|----------|------|----------|
+| 目标地区 | `input_data.target_region` | 120px | `—` |
+| 目标行业 | `input_data.target_industry` | 120px | `—` |
+| 公司规模 | `input_data.company_size` | 140px | `—` |
+| 预算 | `input_data.customer_budget_min` + `_max` | 140px | `—` |
+
+**后端适配：**
+
+`IcpListItem` Schema 新增 `target_region`、`target_industry`、`company_size`、`customer_budget` 字段，从 `input_data` JSONB 中提取。由于 `input_data` 已在 ORM 对象中，无需额外的数据库查询：
+
+```python
+# Schema 层增加 computed 字段或手动填充
+class IcpListItem(BaseModel):
+    ...
+    target_region: Optional[str] = None
+    target_industry: Optional[str] = None
+    company_size: Optional[List[str]] = None
+    customer_budget: Optional[str] = None
+```
+
+列表 API 返回时从 `icp.input_data` 中提取对应键值。
+
+**显示格式：**
+- `company_size`：数组以顿号连接显示，如"小型企业、中型企业"
+- `customer_budget`：格式化为 "$min — $max USD"，如 "$5,000 — $50,000 USD"
+
+### 13.7 已完成画像支持二次编辑并重新生成
+
+#### 13.7.1 现状
+
+| 维度 | v1.2 |
+|------|------|
+| 「重新生成」按钮可见条件 | 仅 `status === 'draft' || status === 'failed'` |
+| 编辑输入数据 | 无前端入口（`PUT /{icp_id}` 后端接口存在但前端未调用） |
+| Store action | 无 `update` action |
+| `completed` 状态 | **只读**，不可修改 |
+
+#### 13.7.2 变更
+
+| 维度 | v1.2 | v1.3 |
+|------|------|------|
+| 「重新生成」按钮 | 仅 draft/failed | **扩展至 completed** |
+| 编辑入口 | 无 | **详情页「编辑输入信息」按钮** |
+| 编辑方式 | — | **详情页内联编辑**（左侧输入摘要变为可编辑表单） |
+| 保存 | — | `PUT /{icp_id}` 更新 → `POST /{icp_id}/generate` 重新生成 |
+| Store | `create`、`remove` | **新增 `update(id, data)` action** |
+| 覆盖确认 | 无 | `ElMessageBox.confirm`："重新生成将覆盖现有画像结果，是否继续？" |
+
+#### 13.7.3 编辑交互流程
+
+```
+详情页（completed）→ 点击「编辑输入信息」
+→ 左侧「输入信息」从 el-descriptions 切换为可编辑表单
+→ 表单复用 Create 页的字段结构（含产品选择器、价格结构化输入等）
+→ 点击「保存并重新生成」
+→ ElMessageBox.confirm 二次确认
+→ PUT /{icp_id} 更新 input_data
+→ 详情页显示 SSE 流式生成进度
+→ 生成完成 → 刷新详情页，显示新 output_data
+```
+
+#### 13.7.4 状态流转
+
+```
+draft     → [生成] → generating → completed ✓
+completed → [编辑并重新生成] → generating → completed（覆盖）
+failed    → [重新生成] → generating → completed
+```
+
+### 13.8 数据模型变更汇总
+
+#### Schema 变更（IcpInputData）
+
+| 字段 | 操作 | 旧类型 | 新类型 |
+|------|------|--------|--------|
+| `company_size` | 类型变更 | `Optional[str]` | `Optional[List[str]]` |
+| `product_ids` | **新增** | — | `Optional[List[str]]` |
+| `product_price_min` | **新增** | — | `Optional[float]` |
+| `product_price_max` | **新增** | — | `Optional[float]` |
+| `customer_budget_min` | **新增** | — | `Optional[float]` |
+| `customer_budget_max` | **新增** | — | `Optional[float]` |
+| `product_category` | 废弃（保留） | `Optional[str]` | 不变 |
+| `product_price_range` | 废弃（保留） | `Optional[str]` | 不变 |
+| `product_features` | 废弃（保留） | `Optional[str]` | 不变 |
+| `customer_budget` | 废弃（保留） | `Optional[str]` | 不变 |
+
+#### Schema 变更（IcpListItem）
+
+| 字段 | 操作 | 来源 |
+|------|------|------|
+| `target_region` | **新增** | `input_data.target_region` |
+| `target_industry` | **新增** | `input_data.target_industry` |
+| `company_size` | **新增** | `input_data.company_size` |
+| `customer_budget` | **新增** | `input_data.customer_budget_min` + `_max` 格式化 |
+
+### 13.9 无数据库迁移
+
+本次变更**无需 Alembic 迁移**：
+
+- ICP 的 `input_data` 和 `output_data` 均使用 JSONB 存储，Schema 变更仅影响 Pydantic 校验层
+- 新增字段（`product_ids`、价格 min/max）是 JSONB 内的键，新旧数据在同一 JSONB 列中共存
+- `company_size` 类型变更：旧字符串值在读取时自动包装为单元素列表，无需数据库层面修改
+- 废弃字段保留在 Schema 中，已有数据不受影响
+
+### 13.10 风险与注意事项
+
+| 风险 | 等级 | 缓解策略 |
+|------|------|----------|
+| AI Prompt 质量波动 | 中 | 产品关联改为实际产品数据后 prompt 内容更丰富，需关注生成效果；必要时微调 prompt 模板 |
+| 向后兼容性 | 低 | 废弃字段保留在 Schema 中，读取优先新字段、回退旧字段 |
+| Prompt 长度 | 低 | 前端限制最多选择 10 个产品，避免 prompt 超出 token 限制 |
+| 旧数据 company_size 迁移 | 低 | 读取时自动检测并包装为列表，无需 ETL |
+
+### 13.11 改动文件清单
+
+#### 后端
+
+| 文件 | 改动 |
+|------|------|
+| [backend/app/schemas/icp.py](../backend/app/schemas/icp.py) | `IcpInputData` 新增/废弃字段，`company_size` 类型变更；`IcpListItem` 新增 4 个显示字段 |
+| [backend/app/api/icps.py](../backend/app/api/icps.py) | 列表查询提取 `input_data` 子字段填充 `IcpListItem`；generate 端点支持产品信息快照 |
+| [backend/app/services/ai/icp_generator.py](../backend/app/services/ai/icp_generator.py) | Prompt 模板适配 `product_ids` + 结构化价格 + 公司规模数组 |
+
+#### 前端
+
+| 文件 | 改动 |
+|------|------|
+| [frontend/src/stores/icp.ts](../frontend/src/stores/icp.ts) | `IcpInputData`/`IcpItem` 接口更新，新增 `update()` action |
+| [frontend/src/views/icp/IcpCreate.vue](../frontend/src/views/icp/IcpCreate.vue) | Step 0 公司规模多选；Step 1 完全重构为产品选择器；Step 2 价格结构化 + 草稿按钮 |
+| [frontend/src/views/icp/IcpListView.vue](../frontend/src/views/icp/IcpListView.vue) | 表格新增 4 列 |
+| [frontend/src/views/icp/IcpDetail.vue](../frontend/src/views/icp/IcpDetail.vue) | 编辑模式、重新生成扩展到 completed、覆盖确认 |
+| [frontend/src/views/icp/components/ProductSelector.vue](../frontend/src/views/icp/components/ProductSelector.vue) | **新增** — 可复用产品多选组件 |
+
+#### 文档
+
+| 文件 | 改动 |
+|------|------|
+| [docs/prd.md](../docs/prd.md) | 新增 §13 v1.3 变更记录 |
+
+### 13.12 验证方式
+
+| # | 验证项 | 验证步骤 |
+|---|--------|----------|
+| 1 | 公司规模多选 | 创建 ICP 时多选 2+ 个规模 → 检查详情页/列表正确显示 |
+| 2 | 产品关联 | 新建 ICP 时从产品列表选择产品 → 验证 AI 生成 prompt 包含完整产品信息 |
+| 3 | 价格结构化 | 输入 min/max 价格 → 检查列表预算列格式化正确 → AI 输出使用 USD 单位 |
+| 4 | 草稿保存 | 保存草稿 → 列表「草稿」统计 +1 → 详情页可重新生成 |
+| 5 | 列表新字段 | 检查列表 4 个新增列正确显示，空值显示 `—` |
+| 6 | 二次编辑 | 编辑已完成 ICP → 修改输入 → 重新生成 → 验证 output_data 更新且无重复 |
