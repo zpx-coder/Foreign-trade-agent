@@ -59,6 +59,7 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElUpload: typeof import('element-plus/es')['ElUpload']
     EmptyState: typeof import('./components/common/EmptyState.vue')['default']
+    ImageUpload: typeof import('./components/common/ImageUpload.vue')['default']
     LoadingSkeleton: typeof import('./components/common/LoadingSkeleton.vue')['default']
     PageHeader: typeof import('./components/common/PageHeader.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

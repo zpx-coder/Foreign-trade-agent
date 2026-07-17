@@ -48,6 +48,21 @@ const appRoutes: RouteRecordRaw = {
       component: () => import("@/views/enterprise/EnterpriseEdit.vue"),
     },
     {
+      path: "products",
+      name: "Products",
+      component: () => import("@/views/product/ProductListView.vue"),
+    },
+    {
+      path: "products/create",
+      name: "ProductCreate",
+      component: () => import("@/views/product/ProductCreate.vue"),
+    },
+    {
+      path: "products/:id/edit",
+      name: "ProductEdit",
+      component: () => import("@/views/product/ProductEdit.vue"),
+    },
+    {
       path: "icps",
       name: "Icps",
       component: () => import("@/views/icp/IcpListView.vue"),

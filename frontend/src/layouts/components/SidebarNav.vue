@@ -74,6 +74,7 @@ const appNavItems = [
     ],
   },
   { path: "/app/enterprise", title: "企业资料", icon: "OfficeBuilding" },
+  { path: "/app/products", title: "产品管理", icon: "Goods" },
   { path: "/app/settings", title: "系统设置", icon: "Setting" },
 ];
 </script>

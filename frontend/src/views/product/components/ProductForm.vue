@@ -63,8 +63,35 @@
       </el-col>
     </el-row>
 
-    <el-form-item label="产品图片 URL" prop="image_url">
-      <el-input v-model="form.image_url" placeholder="https://example.com/image.jpg" maxlength="512" />
+    <el-form-item label="产品图片" prop="images">
+      <template v-if="productId">
+        <ImageUpload
+          v-model="form.images"
+          :upload-url="`/products/${productId}/images`"
+          label="产品图片"
+          :max="6"
+          hint="支持 PNG/JPEG/GIF/WebP，单张不超过 5MB"
+        />
+      </template>
+      <template v-else>
+        <div class="images-hint">
+          <el-input
+            v-model="imageUrlInput"
+            placeholder="输入图片 URL 地址，或保存产品后再上传本地图片"
+            maxlength="512"
+            @blur="addImageUrl"
+            @keyup.enter="addImageUrl"
+          />
+          <div v-if="form.images.length" class="images-preview">
+            <img
+              v-for="(url, idx) in form.images"
+              :key="idx"
+              :src="url"
+              class="images-thumb"
+            />
+          </div>
+        </div>
+      </template>
     </el-form-item>
 
     <el-form-item v-if="showActive" label="上架状态" prop="is_active">
@@ -83,6 +110,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from "vue";
 import { type FormInstance, type FormRules } from "element-plus";
+import ImageUpload from "@/components/common/ImageUpload.vue";
 
 interface ProductFormData {
   name: string;
@@ -92,14 +120,16 @@ interface ProductFormData {
   price_usd: number | undefined;
   moq: number | undefined;
   image_url: string;
+  images: string[];
   is_active: boolean;
 }
 
 const props = withDefaults(
   defineProps<{
-    initial?: ProductFormData;
+    initial?: Partial<ProductFormData>;
     saving?: boolean;
     showActive?: boolean;
+    productId?: string;
   }>(),
   {
     initial: () => ({
@@ -110,10 +140,12 @@ const props = withDefaults(
       price_usd: undefined,
       moq: undefined,
       image_url: "",
+      images: [] as string[],
       is_active: true,
     }),
     saving: false,
     showActive: false,
+    productId: "",
   }
 );
 
@@ -132,17 +164,32 @@ const form = reactive<ProductFormData>({
   price_usd: undefined,
   moq: undefined,
   image_url: "",
+  images: [],
   is_active: true,
 });
+
+const imageUrlInput = ref("");
 
 // 初始化表单数据
 watch(
   () => props.initial,
   (val) => {
-    Object.assign(form, val);
+    const defaults: ProductFormData = {
+      name: "", description: "", category: "", hs_code: "",
+      price_usd: undefined, moq: undefined, image_url: "", images: [], is_active: true,
+    };
+    Object.assign(form, { ...defaults, ...val });
   },
   { immediate: true, deep: true }
 );
+
+function addImageUrl() {
+  const url = imageUrlInput.value.trim();
+  if (url && !form.images.includes(url)) {
+    form.images.push(url);
+  }
+  imageUrlInput.value = "";
+}
 
 const rules: FormRules = {
   name: [
@@ -163,6 +210,7 @@ async function handleSubmit() {
     price_usd: form.price_usd ?? null,
     moq: form.moq ?? null,
     image_url: form.image_url || null,
+    images: form.images.length ? form.images : null,
   };
 
   if (props.showActive) {
@@ -198,5 +246,24 @@ export default {
     display: flex;
     gap: 12px;
   }
+}
+
+.images-hint {
+  width: 100%;
+}
+
+.images-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.images-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 </style>

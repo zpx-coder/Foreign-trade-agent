@@ -48,6 +48,16 @@
       />
       <template v-else>
         <el-table :data="products" stripe style="width: 100%">
+          <el-table-column label="图片" width="70">
+            <template #default="{ row }">
+              <img
+                v-if="(row.images && row.images.length) || row.image_url"
+                :src="(row.images && row.images[0]) || row.image_url"
+                class="product-thumb"
+              />
+              <span v-else class="text-muted">—</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="name" label="产品名称" min-width="180">
             <template #default="{ row }">
               <div class="product-name">
@@ -249,6 +259,14 @@ onMounted(fetchProducts);
 
   .text-muted {
     color: #c0c4cc;
+  }
+
+  .product-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
   }
 
   .pagination-wrap {

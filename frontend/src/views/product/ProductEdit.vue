@@ -22,6 +22,8 @@
         ref="formRef"
         :initial="initialData"
         :saving="saving"
+        :product-id="route.params.id as string"
+        show-active
         @submit="handleUpdate"
         @cancel="$router.push('/app/products')"
       />
@@ -45,7 +47,7 @@ const loading = ref(true);
 const saving = ref(false);
 const loadError = ref("");
 
-const initialData = reactive({
+const initialData = reactive<Record<string, any>>({
   name: "",
   description: "",
   category: "",
@@ -53,6 +55,7 @@ const initialData = reactive({
   price_usd: undefined as number | undefined,
   moq: undefined as number | undefined,
   image_url: "",
+  images: [] as string[],
   is_active: true,
 });
 
@@ -68,6 +71,7 @@ async function loadProduct() {
     initialData.price_usd = data.price_usd ? Number(data.price_usd) : undefined;
     initialData.moq = data.moq ?? undefined;
     initialData.image_url = data.image_url || "";
+    initialData.images = data.images || [];
     initialData.is_active = data.is_active;
   } catch (err: any) {
     loadError.value = err?.response?.data?.detail || "加载产品信息失败";
