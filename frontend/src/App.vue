@@ -38,7 +38,7 @@ const authStore = useAuthStore();
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0b1120;
+  background: #0f172a;
 }
 
 .loading-content {

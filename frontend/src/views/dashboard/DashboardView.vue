@@ -50,7 +50,7 @@
     <h3 class="section-title">快速开始</h3>
     <div class="quick-grid">
       <el-card class="quick-card" shadow="hover" @click="$router.push('/app/enterprise')">
-        <div class="quick-card__icon" style="background: #eff6ff; color: #2563eb;">
+        <div class="quick-card__icon" style="background: #eff6ff; color: #3b82f6;">
           <el-icon :size="24"><OfficeBuilding /></el-icon>
         </div>
         <div class="quick-card__body">
@@ -86,7 +86,7 @@
     <!-- 核心指标卡片 -->
     <div class="stat-cards">
       <div class="stat-card">
-        <div class="stat-card__icon" style="background: #eff6ff; color: #2563eb;">
+        <div class="stat-card__icon" style="background: #eff6ff; color: #3b82f6;">
           <el-icon :size="20"><PictureFilled /></el-icon>
         </div>
         <div class="stat-card__body">
@@ -341,13 +341,13 @@ function renderEmailChart() {
         data: sent,
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: "#93b4f5" },
-            { offset: 1, color: "#dce6fc" },
+            { offset: 0, color: "#93bbfd" },
+            { offset: 1, color: "#dbeafe" },
           ]),
           borderRadius: [4, 4, 0, 0],
         },
         barWidth: 24,
-        emphasis: { itemStyle: { color: "#2563eb" } },
+        emphasis: { itemStyle: { color: "#3b82f6" } },
       },
       {
         name: "已打开",
@@ -416,7 +416,7 @@ function renderSourceChart() {
           ? [{ value: 1, name: "暂无数据", itemStyle: { color: "#e2e8f0" }, tooltip: { show: false }, label: { show: false }, emphasis: { scaleSize: 0 } }]
           : data.map((d, i) => ({
               ...d,
-              itemStyle: { color: ["#2563eb", "#10b981", "#f59e0b", "#6366f1", "#94a3b8"][i % 5] },
+              itemStyle: { color: ["#3b82f6", "#10b981", "#f59e0b", "#6366f1", "#94a3b8"][i % 5] },
             })),
       },
     ],
@@ -469,7 +469,7 @@ function renderFunnelChart() {
           { value: replied, name: "已回复" },
         ],
         itemStyle: {
-          color: (params: any) => ["#2563eb", "#6366f1", "#10b981"][params.dataIndex],
+          color: (params: any) => ["#3b82f6", "#6366f1", "#10b981"][params.dataIndex],
           borderRadius: [4, 4, 0, 0],
           borderWidth: 0,
           barWidth: "50%",
@@ -628,8 +628,8 @@ onUnmounted(() => {
     border-color: #10b981;
   }
   :deep(.el-step__head.is-process) {
-    color: #2563eb;
-    border-color: #2563eb;
+    color: #3b82f6;
+    border-color: #3b82f6;
   }
   :deep(.el-step__title) {
     font-size: 14px;
@@ -680,8 +680,8 @@ onUnmounted(() => {
   cursor: pointer;
 
   &:hover:not(.disabled) {
-    border-color: #2563eb;
-    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
+    border-color: #3b82f6;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.08);
     transform: translateY(-1px);
 
     .quick-card__arrow { opacity: 1; transform: translateX(0); }
@@ -745,7 +745,7 @@ onUnmounted(() => {
   font-size: 10px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #2563eb, #6366f1);
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
   padding: 1px 6px;
   border-radius: 4px;
   letter-spacing: 0.5px;

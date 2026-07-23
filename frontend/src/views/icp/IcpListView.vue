@@ -222,7 +222,7 @@ onMounted(() => { loadData(); loadStats(); });
 .icp-name {
   font-weight: 600;
   cursor: pointer;
-  color: #2563eb;
+  color: #3b82f6;
 
   &:hover {
     color: #1d4ed8;

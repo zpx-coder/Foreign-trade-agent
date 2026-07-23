@@ -17,7 +17,7 @@
         <span class="logo-text">管理后台</span>
       </div>
 
-      <el-menu :default-active="route.path" background-color="#0b1120" text-color="rgba(255,255,255,.55)" active-text-color="#fff" router class="nav-menu">
+      <el-menu :default-active="route.path" background-color="#1e293b" text-color="rgba(255,255,255,.55)" active-text-color="#fff" router class="nav-menu">
         <el-menu-item index="/admin/dashboard">
           <el-icon><DataAnalysis /></el-icon><span>运营仪表盘</span>
         </el-menu-item>
@@ -69,7 +69,7 @@ function handleLogout() { authStore.adminLogout(); router.push("/admin/login"); 
 }
 
 .sidebar {
-  background: #0b1120;
+  background: var(--sidebar-bg, #1e293b);
   display: flex;
   flex-direction: column;
   box-shadow: 1px 0 0 rgba(255, 255, 255, 0.04);

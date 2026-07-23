@@ -43,7 +43,7 @@ defineProps<{ subtitle: string }>();
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background: #0b1120;
+  background: #0f172a;
 }
 
 // ── 背景装饰 ──

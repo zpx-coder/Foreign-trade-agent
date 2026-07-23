@@ -24,7 +24,7 @@
     <el-menu
       :default-active="route.path"
       :collapse="collapsed"
-      background-color="#0b1120"
+      background-color="#1e293b"
       text-color="rgba(255,255,255,.55)"
       active-text-color="#fff"
       router
@@ -144,7 +144,7 @@ const appNavItems = [
   }
 
   :deep(.el-menu-item.is-active) {
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.35), rgba(99, 102, 241, 0.25)) !important;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(99, 102, 241, 0.25)) !important;
     color: #fff !important;
     font-weight: 500;
   }

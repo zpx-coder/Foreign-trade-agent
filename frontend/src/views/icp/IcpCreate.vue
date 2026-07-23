@@ -157,9 +157,16 @@
       </div>
     </el-card>
 
-    <!-- AI 生成面板 -->
-    <el-card v-if="showGeneratePanel" class="generate-card">
-      <template #header><span class="card-title">AI 生成结果</span></template>
+    <!-- AI 生成弹窗 -->
+    <el-dialog
+      v-model="showGeneratePanel"
+      title="AI 生成结果"
+      width="600px"
+      :close-on-click-modal="false"
+      destroy-on-close
+      center
+      class="generate-dialog"
+    >
       <StreamingOutput
         :is-streaming="isStreaming"
         :current-section="currentSection"
@@ -167,12 +174,14 @@
         :done="completed"
       >
         <template #done>
-          <el-button type="primary" size="large" @click="goDetail">
-            查看完整画像 <el-icon><ArrowRight /></el-icon>
-          </el-button>
+          <div class="dialog-done-actions">
+            <el-button type="primary" size="large" @click="goDetail">
+              查看完整画像 <el-icon><ArrowRight /></el-icon>
+            </el-button>
+          </div>
         </template>
       </StreamingOutput>
-    </el-card>
+    </el-dialog>
   </div>
 </template>
 
@@ -353,16 +362,15 @@ function goDetail() {
   border-top: 1px solid #f1f5f9;
 }
 
-.generate-card {
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 24px;
+.generate-dialog {
+  :deep(.el-dialog__body) {
+    padding-top: 8px;
+  }
 }
 
-.card-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #0f172a;
+.dialog-done-actions {
+  text-align: center;
+  margin-top: 20px;
 }
 
 // ── 价格区间行 ──

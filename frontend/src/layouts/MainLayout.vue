@@ -29,7 +29,7 @@ const isCollapsed = ref(false);
   height: 100vh;
 }
 .sidebar {
-  background: #0b1120;
+  background: var(--sidebar-bg, #1e293b);
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   box-shadow: 1px 0 0 rgba(255, 255, 255, 0.04);
