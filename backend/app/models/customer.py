@@ -43,7 +43,7 @@ class Customer(Base):
 
     # ── 来源信息 ──
     source: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="manual", index=True,
+        String(200), nullable=False, default="manual", index=True,
     )
     source_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     icp_id: Mapped[Optional[uuid.UUID]] = mapped_column(

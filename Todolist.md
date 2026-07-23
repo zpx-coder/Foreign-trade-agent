@@ -68,3 +68,29 @@
 - **需求 5 — 列表新增 4 字段**：`IcpListItem` Schema 新增 `target_region`/`target_industry`/`company_size`/`customer_budget`，API 列表端点从 `input_data` 提取填充，前端表格新增 4 列。
 - **需求 6 — 二次编辑重新生成**：[IcpDetail.vue](frontend/src/views/icp/IcpDetail.vue) 新增「编辑输入信息」按钮（内联编辑模式）、`completed` 状态重新生成（含覆盖确认弹窗）、Store 新增 `update()` action。
 - **验证**：TypeScript `vue-tsc --noEmit` 零错误，Python 3 文件语法检查通过。
+
+## 2026-07-22 — v1.4 客户搜索联系人发现率优化
+
+- **问题分析**：客户搜索模块联系人发现率低——AI prompt 过于保守、搜索渠道仅限公司名、网站抓取覆盖面窄（4页/8秒）、无邮箱推断。
+- **Contact 模型扩展**：新增 `contact_type`（scraped/inferred/ai_suggested）和 `confidence`（high/medium/low）字段，Alembic 迁移 `8a1c3d5e7f92` 已执行。
+- **新增 LinkedIn 人物搜索渠道**：[linkedin_people_channel.py](backend/app/services/search/linkedin_people_channel.py) — 搜索 `site:linkedin.com/in` + 行业/职位关键词，从搜索结果摘要提取人名+职位。
+- **增强 Contact Scraper**：页面路径 4→13 个（新增 our-team/people/management/leadership），最大页数 4→8，超时 8→12s，新增 `mailto:` 链接提取、Schema.org Person/Organization JSON-LD 结构化数据提取、`<meta>` 标签提取。
+- **新增 Email Inferrer**：[email_inferrer.py](backend/app/services/enrichment/email_inferrer.py) — 从人名+域名推断企业邮箱（6 种常见模式），通过已知邮箱反推公司命名规则。
+- **新增 AI 定向联系人搜索**：[contact_search.py](backend/app/services/search/contact_search.py) — 对每家公司生成 5 类精确搜索查询（邮箱、采购经理、LinkedIn、联系方式页），从搜索结果提取联系人线索。
+- **优化 AI Prompt**：AI 搜索 prompt 从"不要编造邮箱"改为"合理推测时可填写，标记 confidence: inferred"，支持区分 verified/inferred 置信度。
+- **搜索端点重构**（customers.py）：原 4 步流程 → 6 步（新增 Step 4 定向联系人搜索 + Step 6 邮箱模式推断），所有联系人保存携带 contact_type/confidence。
+- **前端适配**：CustomerListView 搜索对话框新增"LinkedIn 人物搜索"复选框，StreamingOutput 进度步骤新增"定向联系人搜索"和"邮箱模式推断"两步，完成面板显示各渠道联系人增量统计。
+- **客户详情 AI 搜联系人**：新增 `POST /customers/{id}/ai-search-contacts` SSE 端点（4步：LinkedIn人物搜索→定向搜索→网站抓取→邮箱推断），CustomerDetail 联系人卡片头部新增"AI 搜联系人"按钮，联系人卡片显示来源标签（AI发现/推测/待验证）。
+- **修复 ICP 编辑保存 500 错误**：`update_icp` 端点中 `data.model_dump()` 递归将嵌套 `IcpInputData` 转为 dict 后，代码对 dict 调用 `.model_dump()` 导致 `AttributeError`。改为直接从原始 Pydantic 模型 `data.input_data.model_dump()` 取值。
+
+## 2026-07-22 — v1.4 客户搜索后台执行
+
+- **背景**：客户搜索整个过程耗时较长，用户必须在弹窗中等待不能关闭。
+- **后端 — 任务管理器**：新增 [task_manager.py](backend/app/services/search/task_manager.py) 内存任务管理器，支持 create/get/list/update/remove + 自动清理过期任务（2h TTL）。
+- **后端 — 搜索逻辑重构**：提取 `_execute_search()` 独立异步函数，通过 `on_progress` 回调报告进度，SSE 端点和后台端点共用同一逻辑。`POST /customers/search` 改用 `asyncio.Queue` + `asyncio.create_task` 模式。
+- **后端 — 新增端点**：
+  - `POST /customers/search/background`：接收搜索参数，创建后台任务（`asyncio.create_task`），立即返回 `task_id`。
+  - `GET /customers/search/tasks`：返回当前租户最近 20 个搜索任务（含进度、结果、状态）。
+- **前端 — 搜索弹窗**：footer 新增「后台执行」按钮，点击后关闭弹窗并提交后台任务。
+- **前端 — 任务进度面板**：客户列表页顶部（筛选栏上方）新增可折叠的后台任务面板，显示运行中/已完成/失败任务，运行中任务展示进度条和当前步骤，每 3 秒轮询刷新，无活跃任务时自动停止轮询。
+- **验证**：TypeScript `vue-tsc --noEmit` 零错误，Vite build 成功，Python 路由注册验证通过。

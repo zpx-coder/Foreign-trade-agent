@@ -39,6 +39,8 @@ class Contact(Base):
     phone: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     linkedin_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    contact_type: Mapped[Optional[str]] = mapped_column(String(20), default="scraped", nullable=True)
+    confidence: Mapped[Optional[str]] = mapped_column(String(10), default=None, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

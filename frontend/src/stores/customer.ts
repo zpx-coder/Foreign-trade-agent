@@ -29,6 +29,8 @@ export interface ContactItem {
   phone: string | null;
   linkedin_url: string | null;
   is_primary: boolean;
+  contact_type: string | null;
+  confidence: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

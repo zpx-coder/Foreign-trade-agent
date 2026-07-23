@@ -17,9 +17,10 @@ AI_SEARCH_SYSTEM_PROMPT = """你是一个 B2B 外贸客户开发专家。根据�
 3. 网站域名尽可能准确
 4. 每条记录包含：company_name（必填）、website、industry、country、city、company_size、description
 5. 尽可能提供该公司的关键联系人（采购、销售或管理层），格式为 contacts 数组
-6. 联系人信息仅在你比较确定时填写，不确定的字段用 null，不要编造邮箱地址
-7. 返回至少 10 条，最多 20 条结果
-8. 仅返回 JSON 数组，不要包含任何其他文字
+6. 联系人信息按 confidence 区分：verified（网页确认过的）> inferred（根据命名规则推测的）> null（完全不确定则不填）
+7. 邮箱地址在合理推测时可填写（如根据该公司命名规则推测 firstname.lastname@company.com），标记 confidence 为 "inferred"
+8. 返回至少 10 条，最多 20 条结果
+9. 仅返回 JSON 数组，不要包含任何其他文字
 
 输出格式示例：
 [
@@ -35,9 +36,10 @@ AI_SEARCH_SYSTEM_PROMPT = """你是一个 B2B 外贸客户开发专家。根据�
       {
         "name": "Roland Busch",
         "title": "CEO",
-        "email": null,
+        "email": "roland.busch@siemens.com",
         "phone": null,
-        "linkedin_url": null
+        "linkedin_url": "https://www.linkedin.com/in/roland-busch",
+        "confidence": "inferred"
       }
     ]
   }
@@ -86,6 +88,20 @@ class AISearchChannel(SearchChannel):
                 name = c.get("company_name", "").strip()
                 if not name:
                     continue
+                # 处理联系人，保留 confidence 字段
+                raw_contacts = c.get("contacts") or []
+                contacts = []
+                for rc in raw_contacts:
+                    contact = {
+                        "name": rc.get("name"),
+                        "title": rc.get("title"),
+                        "email": rc.get("email"),
+                        "phone": rc.get("phone"),
+                        "linkedin_url": rc.get("linkedin_url"),
+                        "confidence": rc.get("confidence", "inferred"),
+                    }
+                    if contact["name"]:
+                        contacts.append(contact)
                 results.append(
                     SearchResult(
                         company_name=name,
@@ -95,7 +111,7 @@ class AISearchChannel(SearchChannel):
                         city=c.get("city"),
                         company_size=c.get("company_size"),
                         description=c.get("description"),
-                        contacts=c.get("contacts") or [],
+                        contacts=contacts,
                         source_url=c.get("website"),
                         source_channel="ai_search",
                         skip_extraction=True,

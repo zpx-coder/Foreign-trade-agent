@@ -9,7 +9,7 @@
         <div class="pulse-ring__wave wave-2" />
       </div>
 
-      <p class="gen-status-text">{{ thinkingText }}</p>
+      <p v-if="displayStatusText" class="gen-status-text">{{ displayStatusText }}</p>
 
       <!-- 进度条 -->
       <div class="gen-progress-bar">
@@ -18,7 +18,7 @@
       </div>
 
       <!-- 步骤列表 -->
-      <div class="gen-sections">
+      <div v-if="sectionList.length > 0" class="gen-sections">
         <div
           v-for="s in sectionList"
           :key="s.key"
@@ -43,7 +43,7 @@
           <path d="M20 32l8 8 16-16" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" class="done-path" />
         </svg>
       </div>
-      <p class="done-text">画像生成完成</p>
+      <p class="done-text">{{ doneText }}</p>
       <slot name="done" />
     </div>
 
@@ -63,38 +63,53 @@
 import { computed } from "vue";
 import { CircleCheckFilled } from "@element-plus/icons-vue";
 
-const props = defineProps<{
+interface SectionItem {
+  key: string;
+  label: string;
+}
+
+const props = withDefaults(defineProps<{
   isStreaming: boolean;
   currentSection: string | null;
   error: string | null;
   done?: boolean;
-}>();
-
-const sectionList = [
-  { key: "summary", label: "生成画像摘要" },
-  { key: "target_market", label: "分析目标市场" },
-  { key: "customer_persona", label: "构建客户画像" },
-  { key: "competitive_advantages", label: "梳理竞争优势" },
-  { key: "recommended_approach", label: "生成推荐策略" },
-];
+  sectionList?: SectionItem[];
+  thinkingTexts?: string[];
+  doneText?: string;
+  statusText?: string;
+}>(), {
+  done: false,
+  sectionList: () => [
+    { key: "summary", label: "生成画像摘要" },
+    { key: "target_market", label: "分析目标市场" },
+    { key: "customer_persona", label: "构建客户画像" },
+    { key: "competitive_advantages", label: "梳理竞争优势" },
+    { key: "recommended_approach", label: "生成推荐策略" },
+  ],
+  thinkingTexts: () => ["AI 正在分析输入信息...", "正在生成市场洞察...", "正在构建客户画像...", "正在优化策略建议...", "即将完成..."],
+  doneText: "画像生成完成",
+  statusText: "",
+});
 
 const completedSections = computed(() => {
   if (!props.currentSection) return new Set<string>();
-  const idx = sectionList.findIndex((s) => s.key === props.currentSection);
-  return new Set(sectionList.slice(0, idx).map((s) => s.key));
+  const idx = props.sectionList.findIndex((s) => s.key === props.currentSection);
+  return new Set(props.sectionList.slice(0, idx).map((s) => s.key));
 });
 
 const progressPercent = computed(() => {
   if (!props.currentSection) return 8;
-  const idx = sectionList.findIndex((s) => s.key === props.currentSection);
-  return Math.min(Math.round(((idx + 1) / sectionList.length) * 100), 92);
+  const idx = props.sectionList.findIndex((s) => s.key === props.currentSection);
+  if (idx < 0) return 50;
+  return Math.min(Math.round(((idx + 1) / props.sectionList.length) * 100), 92);
 });
 
-const THINKING_TEXTS = ["AI 正在分析输入信息...", "正在生成市场洞察...", "正在构建客户画像...", "正在优化策略建议...", "即将完成..."];
-const thinkingText = computed(() => {
-  if (!props.currentSection) return THINKING_TEXTS[0];
-  const idx = sectionList.findIndex((s) => s.key === props.currentSection);
-  return THINKING_TEXTS[Math.min(idx, THINKING_TEXTS.length - 1)];
+const displayStatusText = computed(() => {
+  if (props.statusText) return props.statusText;
+  if (!props.currentSection) return props.thinkingTexts[0];
+  const idx = props.sectionList.findIndex((s) => s.key === props.currentSection);
+  if (idx < 0) return props.thinkingTexts[0];
+  return props.thinkingTexts[Math.min(idx, props.thinkingTexts.length - 1)];
 });
 </script>
 
@@ -126,7 +141,7 @@ const thinkingText = computed(() => {
     height: 14px;
     margin: -7px 0 0 -7px;
     border-radius: 50%;
-    background: #2563eb;
+    background: #3b82f6;
     z-index: 2;
   }
   &__wave {
@@ -134,7 +149,7 @@ const thinkingText = computed(() => {
     top: 50%;
     left: 50%;
     border-radius: 50%;
-    border: 2px solid #2563eb;
+    border: 2px solid #3b82f6;
     animation: pulse-expand 2s ease-out infinite;
 
     &.wave-1 {
@@ -182,12 +197,12 @@ const thinkingText = computed(() => {
   &__track {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.08), transparent);
+    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.08), transparent);
     animation: shimmer 2s infinite;
   }
   &__fill {
     height: 100%;
-    background: linear-gradient(90deg, #2563eb, #6366f1);
+    background: linear-gradient(90deg, #3b82f6, #6366f1);
     border-radius: 2px;
     transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
@@ -241,8 +256,8 @@ const thinkingText = computed(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #2563eb;
-  box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
+  background: #3b82f6;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
   animation: icon-pulse 1.5s ease-in-out infinite;
 }
 .icon-pending {
@@ -252,8 +267,8 @@ const thinkingText = computed(() => {
   background: #cbd5e1;
 }
 @keyframes icon-pulse {
-  0%, 100% { box-shadow: 0 0 4px rgba(37, 99, 235, 0.3); }
-  50% { box-shadow: 0 0 12px rgba(37, 99, 235, 0.6); }
+  0%, 100% { box-shadow: 0 0 4px rgba(59, 130, 246, 0.3); }
+  50% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.6); }
 }
 
 // ── 完成面板 ──

@@ -55,7 +55,7 @@ class SearchAggregator:
             contacts=a.contacts if a.contacts else b.contacts,
             source_url=a.source_url or b.source_url,
             source_channel=", ".join(
-                filter(None, [a.source_channel, b.source_channel])
+                dict.fromkeys(filter(None, [a.source_channel, b.source_channel]))
             ),
         )
         return merged

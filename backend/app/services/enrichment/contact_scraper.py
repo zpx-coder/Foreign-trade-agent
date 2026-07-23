@@ -3,6 +3,7 @@
 import logging
 import re
 import asyncio
+import json as _json
 from typing import List, Dict, Any, Optional
 from urllib.parse import urljoin, urlparse
 
@@ -26,13 +27,17 @@ _CONTACT_PATHS = [
     "about",           # /about
     "about-us",        # /about-us
     "team",            # /team
+    "our-team",        # /our-team
+    "people",          # /people
+    "management",      # /management
+    "leadership",      # /leadership
     "company",         # /company
     "imprint",         # /imprint (德国公司常有)
     "impressum",       # /impressum
 ]
 
-_PAGE_TIMEOUT = 8.0
-_MAX_PAGES = 4  # 最多抓取 4 个页面
+_PAGE_TIMEOUT = 12.0
+_MAX_PAGES = 8  # 最多抓取 8 个页面
 _MAX_CONTENT_LENGTH = 8000
 
 # 邮箱正则（常见 B2B 模式）
@@ -114,7 +119,7 @@ class ContactScraper:
 
                     soup = BeautifulSoup(resp.text, "lxml")
 
-                    # 提取邮箱
+                    # 提取邮箱（从页面文本）
                     text = resp.text
                     emails = set(_EMAIL_RE.findall(text))
                     # 过滤掉图片/资源路径中的假邮箱
@@ -124,6 +129,55 @@ class ContactScraper:
                         and len(e.split("@")[0]) >= 2
                     }
                     all_emails.update(valid_emails)
+
+                    # 新增：提取 mailto: 链接中的邮箱（更可靠）
+                    for mailto_link in soup.select("a[href^='mailto:']"):
+                        href = mailto_link.get("href", "")
+                        if href:
+                            mailto_email = href.replace("mailto:", "").split("?")[0].strip()
+                            if "@" in mailto_email and len(mailto_email.split("@")[0]) >= 2:
+                                all_emails.add(mailto_email.lower())
+
+                    # 新增：提取 Schema.org Person JSON-LD 结构化数据
+                    for script_tag in soup.select('script[type="application/ld+json"]'):
+                        try:
+                            ld_data = _json.loads(script_tag.string or "{}")
+                            if isinstance(ld_data, dict):
+                                ld_data = [ld_data]
+                            if isinstance(ld_data, list):
+                                for item in ld_data:
+                                    if item.get("@type") == "Person":
+                                        person_email = item.get("email")
+                                        if person_email and "@" in str(person_email):
+                                            all_emails.add(str(person_email).lower())
+                                        person_name = item.get("name")
+                                        person_title = item.get("jobTitle")
+                                        if person_name:
+                                            all_text += f"\n--- Schema.org Person ---\n{person_name}"
+                                            if person_title:
+                                                all_text += f" — {person_title}"
+                                    elif item.get("@type") == "Organization":
+                                        org_emails = item.get("email")
+                                        contact_point = item.get("contactPoint", {})
+                                        if isinstance(contact_point, dict):
+                                            cp_email = contact_point.get("email")
+                                            if cp_email:
+                                                all_emails.add(str(cp_email).lower())
+                                            cp_name = contact_point.get("name")
+                                            if cp_name:
+                                                all_text += f"\n--- Schema.org ContactPoint ---\n{cp_name}"
+                        except (_json.JSONDecodeError, TypeError, AttributeError):
+                            pass
+
+                    # 新增：提取 <meta> 标签中的邮箱和联系人信息
+                    for meta in soup.select('meta[name="author"], meta[name="email"], meta[property="og:email"], meta[name="contact"]'):
+                        content = meta.get("content", "")
+                        if "@" in content:
+                            meta_emails = _EMAIL_RE.findall(content)
+                            all_emails.update(
+                                e.lower() for e in meta_emails
+                                if len(e.split("@")[0]) >= 2
+                            )
 
                     # 提取电话
                     phones = set(_PHONE_RE.findall(text))

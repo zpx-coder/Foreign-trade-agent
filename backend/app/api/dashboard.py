@@ -90,6 +90,66 @@ async def get_dashboard_stats(
         {"name": s, "value": c} for s, c in source_rows
     ]
 
+    # ── 客户画像维度统计（按 ICP 分组 + 状态分布） ──
+    # 按 (icp_id, status) 分组计数
+    icp_status_rows = (
+        await db.execute(
+            select(
+                Customer.icp_id,
+                Customer.status,
+                func.count(Customer.id),
+            )
+            .where(Customer.tenant_id == tenant_id)
+            .group_by(Customer.icp_id, Customer.status)
+        )
+    ).all()
+
+    # 构建 ICP ID → {status: count} 映射
+    icp_status_map: dict = {}
+    for icp_id, status, cnt in icp_status_rows:
+        key = str(icp_id) if icp_id else "__unassigned__"
+        if key not in icp_status_map:
+            icp_status_map[key] = {"total": 0, "statuses": {}}
+        icp_status_map[key]["statuses"][status] = cnt
+        icp_status_map[key]["total"] += cnt
+
+    # 获取 ICP 名称映射
+    icp_ids = [
+        row[0] for row in icp_status_rows if row[0] is not None
+    ]
+    icp_name_map: dict = {}
+    if icp_ids:
+        icp_rows = (
+            await db.execute(
+                select(Icp.id, Icp.name).where(
+                    Icp.id.in_(list(set(icp_ids))),
+                    Icp.tenant_id == tenant_id,
+                )
+            )
+        ).all()
+        icp_name_map = {str(row[0]): row[1] for row in icp_rows}
+
+    # 组装响应
+    customer_icp_stats: List[dict] = []
+    for key, data in icp_status_map.items():
+        if key == "__unassigned__":
+            customer_icp_stats.append({
+                "icp_id": None,
+                "icp_name": "未关联画像",
+                "total": data["total"],
+                "statuses": data["statuses"],
+            })
+        else:
+            customer_icp_stats.append({
+                "icp_id": key,
+                "icp_name": icp_name_map.get(key, "未知画像"),
+                "total": data["total"],
+                "statuses": data["statuses"],
+            })
+
+    # 按客户总数降序排列
+    customer_icp_stats.sort(key=lambda x: x["total"], reverse=True)
+
     # ── 邮件统计（Phase 6） ──
     sendlog_base = select(SendLog).join(
         EmailCampaign, SendLog.campaign_id == EmailCampaign.id
@@ -171,6 +231,7 @@ async def get_dashboard_stats(
         "reach_rate": round(reach_rate, 4),
         "customer_sources": customer_sources,
         "customer_status_counts": customer_status_counts,
+        "customer_icp_stats": customer_icp_stats,
         # 邮件 (Phase 6)
         "total_emails_sent": total_emails_sent,
         "total_emails_opened": total_emails_opened,

@@ -110,17 +110,54 @@
           <template #header>
             <div class="card-header-row">
               <span class="card-title">联系人 ({{ contacts.length }})</span>
-              <el-button size="small" type="primary" @click="openContactDialog()">
-                <el-icon><Plus /></el-icon>添加
-              </el-button>
+              <div class="card-header-actions">
+                <el-button size="small" type="success" :loading="aiSearching" @click="handleAISearchContacts">
+                  <el-icon><MagicStick /></el-icon>AI 搜联系人
+                </el-button>
+                <el-button size="small" type="primary" @click="openContactDialog()">
+                  <el-icon><Plus /></el-icon>添加
+                </el-button>
+              </div>
             </div>
           </template>
-          <EmptyState v-if="!contacts.length" description="暂无联系人" action-text="添加联系人" @action="openContactDialog()" />
-          <div v-else class="contact-list">
+          <!-- AI 搜索进度 -->
+          <div v-if="aiSearching || aiSearchResult" class="ai-search-progress">
+            <StreamingOutput
+              :is-streaming="aiSearching"
+              :current-section="aiCurrentSection"
+              :error="aiSearchError"
+              :done="aiSearchDone"
+              :section-list="aiSearchSectionList"
+              :thinking-texts="aiSearchThinkingTexts"
+              done-text="AI 联系人搜索完成"
+            >
+              <template #done>
+                <div class="ai-search-summary">
+                  <p v-if="aiStats.total > 0">
+                    共发现 <strong>{{ aiStats.total }}</strong> 个联系人线索：
+                    <span v-if="aiStats.linkedin_found > 0">LinkedIn {{ aiStats.linkedin_found }}</span>
+                    <span v-if="aiStats.contact_search_found > 0">定向搜索 {{ aiStats.contact_search_found }}</span>
+                    <span v-if="aiStats.scraped_found > 0">网站抓取 {{ aiStats.scraped_found }}</span>
+                    <span v-if="aiStats.inferred_count > 0">邮箱推断 {{ aiStats.inferred_count }}</span>
+                  </p>
+                  <p v-else>未发现新的联系人信息</p>
+                  <el-button type="primary" size="small" @click="aiSearchResult = false; loadData()">
+                    刷新联系人
+                  </el-button>
+                </div>
+              </template>
+            </StreamingOutput>
+          </div>
+
+          <EmptyState v-if="!contacts.length && !aiSearchResult" description="暂无联系人" action-text="添加联系人" @action="openContactDialog()" />
+          <div v-else-if="contacts.length" class="contact-list">
             <div v-for="c in contacts" :key="c.id" class="contact-card">
               <div class="contact-header">
                 <span class="contact-name">{{ c.name }}</span>
                 <el-tag v-if="c.is_primary" type="warning" size="small" effect="light">主要联系人</el-tag>
+                <el-tag v-if="c.contact_type === 'ai_suggested'" type="success" size="small" effect="light">AI 发现</el-tag>
+                <el-tag v-else-if="c.contact_type === 'inferred'" type="info" size="small" effect="light">推测</el-tag>
+                <el-tag v-if="c.confidence === 'low'" type="warning" size="small" effect="plain">待验证</el-tag>
               </div>
               <div v-if="c.title" class="contact-line">{{ c.title }}</div>
               <div v-if="c.email" class="contact-line">
@@ -299,6 +336,32 @@ const enrichStats = ref<{ contacts_added: number; filled_fields: string[] }>({
   filled_fields: [],
 });
 
+// ── AI 搜联系人 ──
+const aiSearching = ref(false);
+const aiSearchDone = ref(false);
+const aiSearchError = ref<string | null>(null);
+const aiSearchResult = ref(false);
+const aiCurrentSection = ref<string | null>(null);
+const aiStats = ref({
+  linkedin_found: 0,
+  contact_search_found: 0,
+  scraped_found: 0,
+  inferred_count: 0,
+  total: 0,
+});
+const aiSearchSectionList = [
+  { key: "linkedin_people", label: "LinkedIn 人物搜索" },
+  { key: "contact_search", label: "定向联系人搜索" },
+  { key: "scraping", label: "网站抓取" },
+  { key: "email_infer", label: "邮箱模式推断" },
+];
+const aiSearchThinkingTexts = [
+  "正在 LinkedIn 搜索相关人物...",
+  "正在定向搜索联系人...",
+  "正在抓取网站信息...",
+  "正在推断邮箱地址...",
+];
+
 async function handleEnrich() {
   if (!customer.value?.id) return;
   enriching.value = true;
@@ -353,6 +416,69 @@ async function handleEnrich() {
     enrichDone.value = true;
   } finally {
     enriching.value = false;
+  }
+}
+
+async function handleAISearchContacts() {
+  if (!customer.value?.id) return;
+  aiSearching.value = true;
+  aiSearchDone.value = false;
+  aiSearchError.value = null;
+  aiSearchResult.value = true;
+  aiCurrentSection.value = null;
+  aiStats.value = { linkedin_found: 0, contact_search_found: 0, scraped_found: 0, inferred_count: 0, total: 0 };
+
+  const token = localStorage.getItem("access_token");
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+
+  try {
+    const resp = await fetch(`${baseUrl}/customers/${customer.value.id}/ai-search-contacts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: "请求失败" }));
+      throw new Error(err.detail || "AI 搜索请求失败");
+    }
+
+    const reader = resp.body?.getReader();
+    if (!reader) throw new Error("无法读取响应流");
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === "section") {
+              aiCurrentSection.value = event.section;
+            } else if (event.type === "complete") {
+              aiStats.value = {
+                linkedin_found: event.linkedin_found || 0,
+                contact_search_found: event.contact_search_found || 0,
+                scraped_found: event.scraped_found || 0,
+                inferred_count: event.inferred_count || 0,
+                total: event.total || 0,
+              };
+              aiSearchDone.value = true;
+            } else if (event.type === "error") {
+              aiSearchError.value = event.message;
+              aiSearchDone.value = true;
+            }
+          } catch { /* parse skip */ }
+        }
+      }
+    }
+  } catch (err: any) {
+    aiSearchError.value = err.message || "AI 搜索失败";
+    aiSearchDone.value = true;
+  } finally {
+    aiSearching.value = false;
   }
 }
 
@@ -489,7 +615,7 @@ onMounted(loadData);
   }
   .meta-left { display: flex; align-items: center; gap: 8px; }
   .meta-right { display: flex; align-items: center; gap: 16px; }
-  .website-link { display: flex; align-items: center; gap: 4px; color: #2563eb; font-size: 14px; }
+  .website-link { display: flex; align-items: center; gap: 4px; color: #3b82f6; font-size: 14px; }
   .date { color: #94a3b8; font-size: 13px; }
 
   .detail-grid {
@@ -503,6 +629,7 @@ onMounted(loadData);
     :deep(.el-card__body) { padding: 20px 24px; }
   }
   .card-header-row { display: flex; align-items: center; justify-content: space-between; }
+  .card-header-actions { display: flex; align-items: center; gap: 8px; }
   .card-title { font-size: 16px; font-weight: 700; color: #0f172a; }
   .block-title { margin: 20px 0 8px 0; font-size: 14px; font-weight: 600; color: #475569; }
   .ai-summary-block p, .desc-block p, .notes-block p { margin: 0; font-size: 14px; color: #334155; line-height: 1.7; }
@@ -514,6 +641,17 @@ onMounted(loadData);
   }
   .enrich-result { text-align: center; p { margin: 0 0 12px 0; font-size: 14px; color: #334155; } }
 
+  .ai-search-progress {
+    padding: 16px 0;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .ai-search-summary { text-align: center;
+    p { margin: 0 0 12px 0; font-size: 14px; color: #334155;
+      span { margin-left: 8px; color: #64748b; font-size: 13px; }
+    }
+  }
+
   .contact-list { display: flex; flex-direction: column; gap: 12px; }
   .contact-card {
     padding: 14px; border: 1px solid #e2e8f0; border-radius: 10px;
@@ -523,7 +661,7 @@ onMounted(loadData);
   .contact-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
   .contact-name { font-weight: 600; color: #1e293b; }
   .contact-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; margin-top: 4px;
-    a { color: #2563eb; }
+    a { color: #3b82f6; }
   }
   .contact-notes { margin-top: 6px; font-size: 12px; color: #94a3b8; }
   .contact-actions { margin-top: 8px; display: flex; gap: 8px; }

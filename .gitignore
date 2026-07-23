@@ -46,3 +46,4 @@ uploads/
 .eslintcache
 *.pyc
 __pycache__/
+.venv/

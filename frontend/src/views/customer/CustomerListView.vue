@@ -17,37 +17,93 @@
       </template>
     </PageHeader>
 
-    <!-- 数据概览 -->
-    <div class="stats-bar">
-      <div class="stat-item">
-        <el-icon :size="22"><UserFilled /></el-icon>
-        <span class="stat-val">{{ store.total }}</span>
-        <span class="stat-lbl">全部客户</span>
+    <!-- 客户画像维度统计（可点击筛选） -->
+    <div class="icp-stats-bar">
+      <div class="icp-stat-card" :class="{ active: !filters.icp_id && !filters.status }" @click="filterByIcp('', '')">
+        <div class="icp-stat-card__header">
+          <el-icon :size="18"><UserFilled /></el-icon>
+          <span class="icp-stat-card__name">全部客户</span>
+        </div>
+        <span class="icp-stat-card__total">{{ store.total }}</span>
       </div>
-      <div class="stat-item stat-new">
-        <span class="stat-dot"></span>
-        <span class="stat-val">{{ statusCounts.new || 0 }}</span>
-        <span class="stat-lbl">新客户</span>
+      <div
+        v-for="icp in icpStats"
+        :key="icp.icp_id || '__unassigned__'"
+        class="icp-stat-card"
+        :class="{ active: filters.icp_id === icp.icp_id || (icp.icp_id === null && filters.icp_id === '__none__') }"
+        @click="filterByIcp(icp.icp_id || '__none__', '')"
+      >
+        <div class="icp-stat-card__header">
+          <span class="icp-stat-card__dot" :style="{ background: icp.icp_id ? '#3b82f6' : '#94a3b8' }"></span>
+          <span class="icp-stat-card__name">{{ icp.icp_name }}</span>
+        </div>
+        <span class="icp-stat-card__total">{{ icp.total }}</span>
+        <div class="icp-stat-card__statuses">
+          <span v-if="icp.statuses?.new" class="status-dot status-new">{{ icp.statuses.new }}</span>
+          <span v-if="icp.statuses?.contacted" class="status-dot status-contacted">{{ icp.statuses.contacted }}</span>
+          <span v-if="icp.statuses?.qualified" class="status-dot status-qualified">{{ icp.statuses.qualified }}</span>
+          <span v-if="icp.statuses?.negotiating" class="status-dot status-negotiating">{{ icp.statuses.negotiating }}</span>
+          <span v-if="icp.statuses?.closed" class="status-dot status-closed">{{ icp.statuses.closed }}</span>
+        </div>
       </div>
-      <div class="stat-item stat-contacted">
-        <span class="stat-dot"></span>
-        <span class="stat-val">{{ statusCounts.contacted || 0 }}</span>
-        <span class="stat-lbl">已联系</span>
+    </div>
+
+    <!-- 后台搜索任务进度面板 -->
+    <div v-if="searchTasks.length > 0" class="search-tasks-panel">
+      <div class="search-tasks-header" @click="tasksExpanded = !tasksExpanded">
+        <div class="search-tasks-title">
+          <el-icon :size="16"><Clock /></el-icon>
+          <span>后台任务</span>
+          <el-tag v-if="activeTaskCount > 0" size="small" type="warning" round>{{ activeTaskCount }} 个进行中</el-tag>
+        </div>
+        <el-icon :class="{ rotated: tasksExpanded }"><ArrowDown /></el-icon>
       </div>
-      <div class="stat-item stat-qualified">
-        <span class="stat-dot"></span>
-        <span class="stat-val">{{ statusCounts.qualified || 0 }}</span>
-        <span class="stat-lbl">已确认意向</span>
-      </div>
-      <div class="stat-item stat-negotiating">
-        <span class="stat-dot"></span>
-        <span class="stat-val">{{ statusCounts.negotiating || 0 }}</span>
-        <span class="stat-lbl">洽谈中</span>
-      </div>
-      <div class="stat-item stat-closed">
-        <span class="stat-dot"></span>
-        <span class="stat-val">{{ statusCounts.closed || 0 }}</span>
-        <span class="stat-lbl">已成交</span>
+      <div v-show="tasksExpanded" class="search-tasks-body">
+        <div v-for="task in searchTasks" :key="task.task_id" class="search-task-item"
+          :class="`task-${task.status}`" @click="openTaskDetail(task)">
+          <!-- 运行中/等待中 -->
+          <template v-if="task.status === 'pending' || task.status === 'running'">
+            <div class="task-item-header">
+              <el-icon class="task-icon is-loading" :size="16"><Loading /></el-icon>
+              <span class="task-icp-name">{{ task.icp_name }}</span>
+              <span class="task-channels">{{ task.channels?.join(', ') }}</span>
+            </div>
+            <div class="task-item-progress">
+              <span class="task-section">{{ sectionLabel(task.current_section) }}</span>
+              <span class="task-message">{{ task.progress_message }}</span>
+            </div>
+            <div class="task-progress-bar">
+              <div class="task-progress-fill" :style="{ width: progressPercent(task) + '%' }"></div>
+            </div>
+          </template>
+          <!-- 已完成 -->
+          <template v-else-if="task.status === 'completed'">
+            <div class="task-item-header">
+              <el-icon class="task-icon task-done" :size="16"><CircleCheckFilled /></el-icon>
+              <span class="task-icp-name">{{ task.icp_name }}</span>
+              <span class="task-result-text">
+                保存 <strong>{{ task.result?.saved_count || 0 }}</strong> 个客户
+                <template v-if="task.result?.contact_search_count || task.result?.enriched_count || task.result?.inferred_count">
+                  ，找到 <strong>{{ (task.result?.contact_search_count || 0) + (task.result?.enriched_count || 0) + (task.result?.inferred_count || 0) }}</strong> 个联系人
+                </template>
+              </span>
+              <span class="task-time">{{ formatTimeAgo(task.updated_at) }}</span>
+            </div>
+          </template>
+          <!-- 失败 -->
+          <template v-else-if="task.status === 'failed'">
+            <div class="task-item-header">
+              <el-icon class="task-icon task-error" :size="16"><CircleCloseFilled /></el-icon>
+              <span class="task-icp-name">{{ task.icp_name }}</span>
+              <span class="task-error-text">搜索失败：{{ task.error || '未知错误' }}</span>
+              <span class="task-time">{{ formatTimeAgo(task.updated_at) }}</span>
+            </div>
+          </template>
+          <el-button v-if="task.status === 'completed' || task.status === 'failed'"
+            class="task-dismiss-btn" link size="small" @click="dismissTask(task.task_id)">
+            关闭
+          </el-button>
+        </div>
       </div>
     </div>
 
@@ -76,11 +132,6 @@
             <el-option label="AI 提取" value="ai_extraction" />
             <el-option label="Google 搜索" value="google_search" />
             <el-option label="LinkedIn 搜索" value="linkedin_search" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="客户画像">
-          <el-select v-model="filters.icp_id" placeholder="全部" clearable style="width: 180px" @change="handleSearch">
-            <el-option v-for="icp in icpFilterOptions" :key="icp.id" :label="icp.name" :value="icp.id" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -269,6 +320,7 @@
             <el-checkbox label="duckduckgo">DuckDuckGo</el-checkbox>
             <el-checkbox label="google">Google</el-checkbox>
             <el-checkbox label="linkedin">LinkedIn</el-checkbox>
+            <el-checkbox label="linkedin_people">LinkedIn 人物搜索</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
         <el-form-item label="目标区域（可选）">
@@ -276,12 +328,22 @@
         </el-form-item>
       </el-form>
       <div v-if="searching || searchDone" class="search-progress">
-        <StreamingOutput :is-streaming="searching" :error="searchError" :done="searchDone">
+        <StreamingOutput
+          :is-streaming="searching"
+          :current-section="searchCurrentSection"
+          :error="searchError"
+          :done="searchDone"
+          :section-list="searchSectionList"
+          :thinking-texts="searchThinkingTexts"
+          done-text="客户搜索完成"
+        >
           <template #done>
             <div class="search-result-summary">
               <p v-if="savedCount > 0">
                 成功保存 <strong>{{ savedCount }}</strong> 个客户
-                <span v-if="enrichedCount > 0">，其中 <strong>{{ enrichedCount }}</strong> 个已抓取到联系人信息</span>
+                <span v-if="contactSearchCount > 0">，定向搜索找到 <strong>{{ contactSearchCount }}</strong> 个联系人</span>
+                <span v-if="enrichedCount > 0">，网站抓取 <strong>{{ enrichedCount }}</strong> 个联系人</span>
+                <span v-if="inferredCount > 0">，推断 <strong>{{ inferredCount }}</strong> 个邮箱</span>
               </p>
               <p v-else>未找到可保存的客户数据</p>
               <el-button type="primary" @click="searchDialog.visible = false; loadData()">关闭并刷新列表</el-button>
@@ -291,9 +353,96 @@
       </div>
       <template #footer>
         <el-button @click="searchDialog.visible = false">关闭</el-button>
+        <el-button type="default" :disabled="!searchDialog.icpId || !searchDialog.channels.length"
+          @click="startBackgroundSearch">
+          后台执行
+        </el-button>
         <el-button type="primary" :loading="searching"
           :disabled="!searchDialog.icpId || !searchDialog.channels.length" @click="startSearch">
           开始搜索
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 搜索任务详情弹窗 -->
+    <el-dialog v-model="taskDetailDialog.visible" title="搜索任务详情" width="520px" :close-on-click-modal="false">
+      <template v-if="taskDetailDialog.task">
+        <div class="task-detail">
+          <div class="task-detail-row">
+            <span class="task-detail-label">客户画像</span>
+            <span class="task-detail-value">{{ taskDetailDialog.task.icp_name }}</span>
+          </div>
+          <div class="task-detail-row">
+            <span class="task-detail-label">搜索渠道</span>
+            <span class="task-detail-value">{{ taskDetailDialog.task.channels?.join(', ') }}</span>
+          </div>
+          <div class="task-detail-row">
+            <span class="task-detail-label">状态</span>
+            <el-tag v-if="taskDetailDialog.task.status === 'completed'" type="success" size="small">已完成</el-tag>
+            <el-tag v-else-if="taskDetailDialog.task.status === 'failed'" type="danger" size="small">失败</el-tag>
+            <el-tag v-else type="warning" size="small">进行中</el-tag>
+          </div>
+          <div class="task-detail-row">
+            <span class="task-detail-label">创建时间</span>
+            <span class="task-detail-value">{{ new Date(taskDetailDialog.task.created_at).toLocaleString('zh-CN') }}</span>
+          </div>
+          <template v-if="taskDetailDialog.task.status === 'completed'">
+            <el-divider />
+            <div class="task-detail-section-title">搜索统计</div>
+            <div class="task-detail-stats">
+              <div class="task-detail-stat">
+                <span class="stat-num">{{ taskDetailDialog.task.result?.total_found || 0 }}</span>
+                <span class="stat-label">搜索命中</span>
+              </div>
+              <div class="task-detail-stat">
+                <span class="stat-num">{{ taskDetailDialog.task.result?.saved_count || 0 }}</span>
+                <span class="stat-label">保存客户</span>
+              </div>
+              <div class="task-detail-stat">
+                <span class="stat-num">{{ (taskDetailDialog.task.result?.contact_search_count || 0) + (taskDetailDialog.task.result?.enriched_count || 0) + (taskDetailDialog.task.result?.inferred_count || 0) }}</span>
+                <span class="stat-label">发现联系人</span>
+              </div>
+            </div>
+            <el-divider />
+            <div class="task-detail-section-title">联系人来源明细</div>
+            <div class="task-detail-breakdown">
+              <div class="breakdown-item">
+                <span class="breakdown-dot" style="background:#6366f1"></span>
+                <span>定向搜索</span>
+                <span class="breakdown-count">{{ taskDetailDialog.task.result?.contact_search_count || 0 }}</span>
+              </div>
+              <div class="breakdown-item">
+                <span class="breakdown-dot" style="background:#22c55e"></span>
+                <span>网站抓取</span>
+                <span class="breakdown-count">{{ taskDetailDialog.task.result?.enriched_count || 0 }}</span>
+              </div>
+              <div class="breakdown-item">
+                <span class="breakdown-dot" style="background:#f59e0b"></span>
+                <span>邮箱推断</span>
+                <span class="breakdown-count">{{ taskDetailDialog.task.result?.inferred_count || 0 }}</span>
+              </div>
+            </div>
+          </template>
+          <template v-else-if="taskDetailDialog.task.status === 'running' || taskDetailDialog.task.status === 'pending'">
+            <el-divider />
+            <div class="task-detail-section-title">当前进度</div>
+            <div class="task-detail-progress">
+              <p>{{ taskDetailDialog.task.progress_message }}</p>
+              <el-progress :percentage="progressPercent(taskDetailDialog.task)" :show-text="true" />
+            </div>
+          </template>
+          <template v-else-if="taskDetailDialog.task.status === 'failed'">
+            <el-divider />
+            <div class="task-detail-section-title">错误信息</div>
+            <el-alert type="error" :title="taskDetailDialog.task.error || '未知错误'" :closable="false" show-icon />
+          </template>
+        </div>
+      </template>
+      <template #footer>
+        <el-button @click="taskDetailDialog.visible = false">关闭</el-button>
+        <el-button v-if="taskDetailDialog.task?.status === 'completed' || taskDetailDialog.task?.status === 'failed'"
+          type="primary" @click="dismissTask(taskDetailDialog.task?.task_id || ''); taskDetailDialog.visible = false">
+          关闭并移除
         </el-button>
       </template>
     </el-dialog>
@@ -400,11 +549,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import type { FormInstance, FormRules } from "element-plus";
-import { Plus, Search, Download, UserFilled, Upload } from "@element-plus/icons-vue";
+import { Plus, Search, Download, UserFilled, Upload, Clock, ArrowDown, Loading, CircleCheckFilled, CircleCloseFilled } from "@element-plus/icons-vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 import LoadingSkeleton from "@/components/common/LoadingSkeleton.vue";
 import EmptyState from "@/components/common/EmptyState.vue";
@@ -421,7 +570,13 @@ const store = useCustomerStore();
 const filters = reactive({ search: "", status: "", source: "", icp_id: "" });
 const pagination = reactive({ page: 1, pageSize: 20 });
 const icpFilterOptions = ref<{ id: string; name: string }[]>([]);
-const statusCounts = ref<Record<string, number>>({});
+interface IcpStat {
+  icp_id: string | null;
+  icp_name: string;
+  total: number;
+  statuses: Record<string, number>;
+}
+const icpStats = ref<IcpStat[]>([]);
 
 function buildParams() {
   const params: Record<string, string | number> = {
@@ -435,16 +590,31 @@ function buildParams() {
 }
 
 async function loadData() { await store.fetchList(buildParams()); }
-async function loadStatusCounts() {
+async function loadIcpStats() {
   try {
     const { data } = await api.get("/dashboard/stats");
-    statusCounts.value = data.customer_status_counts || {};
+    icpStats.value = data.customer_icp_stats || [];
   } catch { /* */ }
 }
 function handleSearch() { pagination.page = 1; loadData(); }
+function filterByIcp(icpId: string, status: string) {
+  if (icpId === '__none__') {
+    filters.icp_id = '__none__';  // 未关联画像
+  } else {
+    filters.icp_id = icpId;
+  }
+  filters.status = status;
+  pagination.page = 1;
+  loadData();
+}
+function filterByStatus(status: string) {
+  filters.status = status;
+  pagination.page = 1;
+  loadData();
+}
 function handleReset() {
   filters.search = ""; filters.status = ""; filters.source = ""; filters.icp_id = "";
-  pagination.page = 1; loadData();
+  pagination.page = 1; loadData(); loadIcpStats();
 }
 
 // ── 批量 ──
@@ -456,7 +626,7 @@ async function handleBatchStatus() {
   try {
     await store.batchUpdateStatus(selectedIds.value, batchStatus.value);
     ElMessage.success(`已更新状态`);
-    selectedIds.value = []; batchStatus.value = ""; loadData();
+    selectedIds.value = []; batchStatus.value = ""; loadData(); loadIcpStats();
   } catch (err: any) { ElMessage.error(err?.response?.data?.detail || "批量更新失败"); }
 }
 
@@ -471,6 +641,7 @@ async function handleStatusChange(row: CustomerListItem, newStatus: string) {
   try {
     await store.update(row.id, { status: newStatus });
     ElMessage.success("状态已更新");
+    loadIcpStats();
   } catch (err: any) {
     row.status = oldStatus; // 回退
     ElMessage.error(err?.response?.data?.detail || "状态更新失败");
@@ -558,27 +729,180 @@ const searchDialog = reactive({
   visible: false, icpId: "", channels: ["ai"] as string[], region: "",
 });
 const icpOptions = ref<{ id: string; name: string }[]>([]);
+const searchSectionList = [
+  { key: "searching", label: "多渠道搜索" },
+  { key: "deduping", label: "聚合去重" },
+  { key: "saving", label: "AI 结构化提取 & 保存" },
+  { key: "contact_search", label: "定向联系人搜索" },
+  { key: "enriching", label: "抓取网站联系人" },
+  { key: "email_infer", label: "邮箱模式推断" },
+];
+const searchThinkingTexts = [
+  "正在多渠道搜索目标客户...",
+  "正在聚合去重...",
+  "正在 AI 结构化提取...",
+  "正在定向搜索联系人...",
+  "正在抓取网站联系人信息...",
+  "正在推断邮箱地址...",
+];
+
 const searching = ref(false);
+const searchAbortController = ref<AbortController | null>(null);
 const searchDone = ref(false);
 const searchError = ref<string | null>(null);
+const searchCurrentSection = ref<string | null>(null);
 const savedCount = ref(0);
 const enrichedCount = ref(0);
+const contactSearchCount = ref(0);
+const inferredCount = ref(0);
+
+// ── 后台任务 ──
+interface SearchTask {
+  task_id: string;
+  tenant_id: string;
+  icp_name: string;
+  channels: string[];
+  region: string | null;
+  status: "pending" | "running" | "completed" | "failed";
+  current_section: string | null;
+  progress_message: string;
+  result: {
+    saved_count: number;
+    enriched_count: number;
+    contact_search_count: number;
+    inferred_count: number;
+    total_found: number;
+  };
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+const searchTasks = ref<SearchTask[]>([]);
+const tasksExpanded = ref(true);
+const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null);
+const taskDetailDialog = reactive({
+  visible: false,
+  task: null as SearchTask | null,
+});
+
+const activeTaskCount = computed(() =>
+  searchTasks.value.filter((t) => t.status === "pending" || t.status === "running").length
+);
+
+const sectionLabels: Record<string, string> = {
+  searching: "多渠道搜索",
+  deduping: "聚合去重",
+  saving: "AI 结构化提取 & 保存",
+  contact_search: "定向联系人搜索",
+  enriching: "抓取网站联系人",
+  email_infer: "邮箱模式推断",
+};
+function sectionLabel(section: string | null): string {
+  if (!section) return "";
+  return sectionLabels[section] || section;
+}
+
+function progressPercent(task: SearchTask): number {
+  const order = ["searching", "deduping", "saving", "contact_search", "enriching", "email_infer"];
+  const idx = order.indexOf(task.current_section || "");
+  return idx >= 0 ? Math.round(((idx + 0.5) / order.length) * 100) : 10;
+}
+
+function formatTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return `${sec} 秒前`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} 分钟前`;
+  const hr = Math.floor(min / 60);
+  return `${hr} 小时前`;
+}
 
 async function openSearchDialog() {
   searchDialog.visible = true;
   searchDialog.icpId = ""; searchDialog.channels = ["duckduckgo"]; searchDialog.region = "";
-  searchDone.value = false; searchError.value = null; savedCount.value = 0; enrichedCount.value = 0;
+  searchDone.value = false; searchError.value = null; searchCurrentSection.value = null;
+  savedCount.value = 0; enrichedCount.value = 0; contactSearchCount.value = 0; inferredCount.value = 0;
   try {
     const { data } = await api.get("/icps", { params: { page: 1, page_size: 50 } });
     icpOptions.value = data.items || [];
   } catch { icpOptions.value = []; }
 }
 
+// ── 后台搜索 ──
+async function startBackgroundSearch() {
+  if (!searchDialog.icpId || !searchDialog.channels.length) return;
+
+  // 如果当前正在进行 SSE 搜索，先中止并转为后台执行
+  const wasSearching = searching.value;
+  if (wasSearching && searchAbortController.value) {
+    searchAbortController.value.abort();
+    searchAbortController.value = null;
+    searching.value = false;
+  }
+
+  try {
+    await api.post("/customers/search/background", {
+      icp_id: searchDialog.icpId,
+      channels: searchDialog.channels,
+      region: searchDialog.region || null,
+    });
+    searchDialog.visible = false;
+    tasksExpanded.value = true;
+    ElMessage.success(wasSearching ? "搜索已转到后台执行" : "搜索任务已提交，可在页面顶部查看进度");
+    fetchSearchTasks();
+    startPolling();
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.detail || "提交后台任务失败");
+  }
+}
+
+async function fetchSearchTasks() {
+  try {
+    const { data } = await api.get("/customers/search/tasks");
+    searchTasks.value = (data.tasks || []).slice(0, 10);
+  } catch { /* ignore */ }
+}
+
+function startPolling() {
+  stopPolling();
+  pollingTimer.value = setInterval(() => {
+    if (activeTaskCount.value > 0) {
+      fetchSearchTasks();
+    } else {
+      stopPolling();
+    }
+  }, 3000);
+}
+
+function stopPolling() {
+  if (pollingTimer.value) {
+    clearInterval(pollingTimer.value);
+    pollingTimer.value = null;
+  }
+}
+
+function openTaskDetail(task: SearchTask) {
+  taskDetailDialog.task = task;
+  taskDetailDialog.visible = true;
+}
+
+function dismissTask(taskId: string) {
+  searchTasks.value = searchTasks.value.filter((t) => t.task_id !== taskId);
+  if (taskDetailDialog.task?.task_id === taskId) {
+    taskDetailDialog.visible = false;
+    taskDetailDialog.task = null;
+  }
+}
+
 function startSearch() {
   if (!searchDialog.icpId || !searchDialog.channels.length) return;
-  searching.value = true; searchDone.value = false; searchError.value = null; savedCount.value = 0;
+  searching.value = true; searchDone.value = false; searchError.value = null; searchCurrentSection.value = null;
+  savedCount.value = 0; enrichedCount.value = 0; contactSearchCount.value = 0; inferredCount.value = 0;
   const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
   const token = localStorage.getItem("access_token");
+  const controller = new AbortController();
+  searchAbortController.value = controller;
   fetch(`${baseUrl}/customers/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -586,6 +910,7 @@ function startSearch() {
       icp_id: searchDialog.icpId, channels: searchDialog.channels,
       region: searchDialog.region || null,
     }),
+    signal: controller.signal,
   }).then(async (response) => {
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
@@ -604,9 +929,13 @@ function startSearch() {
         if (line.startsWith("data: ")) {
           try {
             const event = JSON.parse(line.slice(6));
-            if (event.type === "complete") {
+            if (event.type === "section") {
+              searchCurrentSection.value = event.section || null;
+            } else if (event.type === "complete") {
               savedCount.value = event.saved_count || 0;
               enrichedCount.value = event.enriched_count || 0;
+              contactSearchCount.value = event.contact_search_count || 0;
+              inferredCount.value = event.inferred_count || 0;
               searching.value = false; searchDone.value = true;
             } else if (event.type === "error") {
               searchError.value = event.message;
@@ -618,6 +947,7 @@ function startSearch() {
     }
     searching.value = false; searchDone.value = true;
   }).catch((err) => {
+    if (err.name === "AbortError") return; // 用户切换到后台执行，静默中止
     searchError.value = err.message || "搜索失败";
     searching.value = false; searchDone.value = true;
   });
@@ -698,27 +1028,144 @@ async function loadIcpOptions() {
   try { const { data } = await api.get("/icps", { params: { page_size: 50 } }); icpFilterOptions.value = data.items || []; } catch { /* */ }
 }
 
-onMounted(() => { loadData(); loadIcpOptions(); loadStatusCounts(); });
+onMounted(() => { loadData(); loadIcpOptions(); loadIcpStats(); fetchSearchTasks(); startPolling(); });
+onUnmounted(() => { stopPolling(); });
 </script>
 
 <style scoped lang="scss">
 .customer-list-page {
   // ── 数据概览条 ──
-  .stats-bar {
-    display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
-    .stat-item {
-      display: flex; align-items: center; gap: 8px;
+  // ── ICP 画像维度统计条 ──
+  .icp-stats-bar {
+    display: flex; gap: 12px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px;
+    &::-webkit-scrollbar { height: 4px; }
+    &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+    .icp-stat-card {
+      display: flex; flex-direction: column; gap: 6px;
       background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-      padding: 10px 16px; min-width: 100px;
-      .stat-dot { width: 8px; height: 8px; border-radius: 50%; }
-      .stat-val { font-size: 20px; font-weight: 700; color: #1e293b; }
-      .stat-lbl { font-size: 12px; color: #94a3b8; }
+      padding: 12px 16px; min-width: 140px; flex-shrink: 0;
+      cursor: pointer; user-select: none;
+      transition: all 0.2s;
+      &:hover { border-color: #3b82f6; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1); }
+      &.active { border-color: #3b82f6; background: #eff6ff; box-shadow: 0 0 0 1px #3b82f6; }
+      &__header {
+        display: flex; align-items: center; gap: 6px;
+        color: #64748b; font-size: 12px;
+      }
+      &__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+      &__name {
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;
+      }
+      &__total { font-size: 24px; font-weight: 800; color: #1e293b; line-height: 1; }
+      &__statuses {
+        display: flex; gap: 6px; flex-wrap: wrap;
+        .status-dot {
+          font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 8px;
+          &.status-new { background: #eff6ff; color: #3b82f6; }
+          &.status-contacted { background: #fef3c7; color: #d97706; }
+          &.status-qualified { background: #ecfdf5; color: #059669; }
+          &.status-negotiating { background: #eef2ff; color: #4f46e5; }
+          &.status-closed { background: #e0f2fe; color: #0284c7; }
+        }
+      }
     }
-    .stat-new .stat-dot { background: #3b82f6; }
-    .stat-contacted .stat-dot { background: #f59e0b; }
-    .stat-qualified .stat-dot { background: #10b981; }
-    .stat-negotiating .stat-dot { background: #6366f1; }
-    .stat-closed .stat-dot { background: #059669; }
+  }
+  // ── 后台任务进度面板 ──
+  .search-tasks-panel {
+    margin-bottom: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    .search-tasks-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; cursor: pointer; user-select: none;
+      background: #f8fafc; transition: background 0.15s;
+      &:hover { background: #f1f5f9; }
+      .search-tasks-title {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 13px; font-weight: 600; color: #334155;
+        .el-tag { font-size: 11px; }
+      }
+      .rotated { transform: rotate(180deg); }
+      .el-icon { transition: transform 0.2s; color: #94a3b8; }
+    }
+    .search-tasks-body {
+      padding: 8px 16px 12px;
+    }
+    .search-task-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid #f1f5f9;
+      cursor: pointer; border-radius: 6px; transition: background 0.15s;
+      &:hover { background: #f8fafc; }
+      &:last-child { border-bottom: none; }
+      .task-item-header {
+        display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+        font-size: 13px;
+        .task-icon {
+          flex-shrink: 0;
+          &.is-loading { color: #f59e0b; animation: rotating 2s linear infinite; }
+          &.task-done { color: #22c55e; }
+          &.task-error { color: #ef4444; }
+        }
+        .task-icp-name { font-weight: 600; color: #1e293b; white-space: nowrap; }
+        .task-channels { font-size: 11px; color: #94a3b8; }
+        .task-result-text { color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .task-error-text { color: #ef4444; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .task-time { font-size: 11px; color: #94a3b8; white-space: nowrap; margin-left: auto; }
+      }
+      .task-item-progress {
+        display: none; // progress details shown in header for compactness
+      }
+      .task-progress-bar {
+        width: 100px; height: 4px; background: #e2e8f0; border-radius: 2px; flex-shrink: 0; margin-left: auto;
+        .task-progress-fill {
+          height: 100%; background: linear-gradient(90deg, #3b82f6, #6366f1);
+          border-radius: 2px; transition: width 0.5s ease;
+        }
+      }
+      .task-dismiss-btn {
+        flex-shrink: 0; padding: 2px 6px; font-size: 11px; color: #94a3b8;
+        &:hover { color: #64748b; }
+      }
+      &.task-running, &.task-pending {
+        background: #fffbeb; margin: 0 -16px; padding: 8px 16px;
+      }
+    }
+  }
+  @keyframes rotating { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  // ── 任务详情弹窗 ──
+  .task-detail {
+    .task-detail-row {
+      display: flex; align-items: center; gap: 12px; padding: 8px 0;
+      .task-detail-label { font-size: 13px; color: #64748b; min-width: 80px; }
+      .task-detail-value { font-size: 14px; color: #1e293b; font-weight: 500; }
+    }
+    .task-detail-section-title {
+      font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 12px;
+    }
+    .task-detail-stats {
+      display: flex; gap: 16px;
+      .task-detail-stat {
+        flex: 1; text-align: center; padding: 12px 8px;
+        background: #f8fafc; border-radius: 8px;
+        .stat-num { font-size: 24px; font-weight: 800; color: #1e293b; display: block; }
+        .stat-label { font-size: 12px; color: #64748b; }
+      }
+    }
+    .task-detail-breakdown {
+      .breakdown-item {
+        display: flex; align-items: center; gap: 8px; padding: 6px 0;
+        font-size: 13px; color: #475569;
+        .breakdown-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .breakdown-count { margin-left: auto; font-weight: 600; color: #1e293b; }
+      }
+    }
+    .task-detail-progress {
+      p { font-size: 13px; color: #475569; margin: 0 0 12px; }
+    }
   }
   .filter-card { margin-bottom: 16px; border-radius: 8px; }
   .filter-form :deep(.el-form-item) { margin-bottom: 0; }
@@ -743,7 +1190,7 @@ onMounted(() => { loadData(); loadIcpOptions(); loadStatusCounts(); });
       box-shadow: none;
     }
     :deep(.el-select__placeholder) { font-size: 12px; }
-    &.status-new :deep(.el-input__wrapper) { background: #eff6ff; color: #2563eb; .el-input__inner { color: #2563eb; } }
+    &.status-new :deep(.el-input__wrapper) { background: #eff6ff; color: #3b82f6; .el-input__inner { color: #3b82f6; } }
     &.status-contacted :deep(.el-input__wrapper) { background: #fef3c7; color: #d97706; .el-input__inner { color: #d97706; } }
     &.status-qualified :deep(.el-input__wrapper) { background: #ecfdf5; color: #059669; .el-input__inner { color: #059669; } }
     &.status-negotiating :deep(.el-input__wrapper) { background: #eef2ff; color: #4f46e5; .el-input__inner { color: #4f46e5; } }

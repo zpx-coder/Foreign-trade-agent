@@ -15,6 +15,8 @@ class ContactCreateRequest(BaseModel):
     phone: Optional[str] = Field(default=None, max_length=100)
     linkedin_url: Optional[str] = Field(default=None, max_length=512)
     is_primary: bool = False
+    contact_type: Optional[str] = Field(default="scraped", max_length=20)
+    confidence: Optional[str] = Field(default=None, max_length=10)
     notes: Optional[str] = Field(default=None, max_length=2000)
 
 
@@ -25,6 +27,8 @@ class ContactUpdateRequest(BaseModel):
     phone: Optional[str] = Field(default=None, max_length=100)
     linkedin_url: Optional[str] = Field(default=None, max_length=512)
     is_primary: Optional[bool] = None
+    contact_type: Optional[str] = Field(default=None, max_length=20)
+    confidence: Optional[str] = Field(default=None, max_length=10)
     notes: Optional[str] = Field(default=None, max_length=2000)
 
 
@@ -38,6 +42,8 @@ class ContactResponse(BaseModel):
     phone: Optional[str] = None
     linkedin_url: Optional[str] = None
     is_primary: bool
+    contact_type: Optional[str] = None
+    confidence: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
