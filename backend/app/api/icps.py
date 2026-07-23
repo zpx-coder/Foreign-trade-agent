@@ -184,8 +184,9 @@ async def update_icp(
         raise HTTPException(status_code=404, detail="画像不存在")
 
     update_dict = data.model_dump(exclude_unset=True)
-    if "input_data" in update_dict:
-        update_dict["input_data"] = update_dict["input_data"].model_dump(exclude_unset=True)
+    if data.input_data is not None:
+        # 直接从原始 Pydantic 模型取，避免 model_dump 递归转 dict 后丢失 .model_dump()
+        update_dict["input_data"] = data.input_data.model_dump(exclude_unset=True)
 
     for field, value in update_dict.items():
         setattr(icp, field, value)
