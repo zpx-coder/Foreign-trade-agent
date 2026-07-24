@@ -47,20 +47,18 @@ const appRoutes: RouteRecordRaw = {
       name: "Enterprise",
       component: () => import("@/views/enterprise/EnterpriseEdit.vue"),
     },
+    // v1.5: 产品管理已合并至企业资料，旧路由重定向
     {
       path: "products",
-      name: "Products",
-      component: () => import("@/views/product/ProductListView.vue"),
+      redirect: "/app/enterprise",
     },
     {
       path: "products/create",
-      name: "ProductCreate",
-      component: () => import("@/views/product/ProductCreate.vue"),
+      redirect: "/app/enterprise",
     },
     {
       path: "products/:id/edit",
-      name: "ProductEdit",
-      component: () => import("@/views/product/ProductEdit.vue"),
+      redirect: "/app/enterprise",
     },
     {
       path: "icps",

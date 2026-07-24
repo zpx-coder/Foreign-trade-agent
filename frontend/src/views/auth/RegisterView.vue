@@ -1,5 +1,9 @@
 <template>
-  <AuthLayout subtitle="创建您的企业账户">
+  <AuthLayout>
+    <div class="auth-tabs">
+      <button class="auth-tab auth-tab--active">注册账号</button>
+    </div>
+
     <el-alert
       v-if="errorMessage"
       :title="errorMessage"
@@ -12,14 +16,33 @@
 
     <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleRegister">
       <el-form-item prop="name">
-        <el-input v-model="form.name" placeholder="您的姓名" prefix-icon="User" size="large" />
+        <el-input
+          v-model="form.name"
+          placeholder="您的姓名"
+          prefix-icon="User"
+          size="large"
+        />
       </el-form-item>
+
       <el-form-item prop="company_name">
-        <el-input v-model="form.company_name" placeholder="企业名称" prefix-icon="OfficeBuilding" size="large" />
+        <el-input
+          v-model="form.company_name"
+          placeholder="企业名称"
+          prefix-icon="OfficeBuilding"
+          size="large"
+        />
       </el-form-item>
+
       <el-form-item prop="email">
-        <el-input v-model="form.email" placeholder="邮箱" prefix-icon="Message" size="large" @input="errorMessage = ''" />
+        <el-input
+          v-model="form.email"
+          placeholder="请输入邮箱地址"
+          prefix-icon="Message"
+          size="large"
+          @input="errorMessage = ''"
+        />
       </el-form-item>
+
       <el-form-item prop="password">
         <el-input
           v-model="form.password"
@@ -31,6 +54,7 @@
           @input="onPasswordChange"
         />
       </el-form-item>
+
       <el-form-item prop="confirmPassword">
         <el-input
           v-model="form.confirmPassword"
@@ -42,12 +66,20 @@
           @input="errorMessage = ''"
         />
       </el-form-item>
+
       <el-form-item>
-        <el-button type="primary" size="large" :loading="loading" native-type="submit" class="w-full">
+        <el-button
+          type="primary"
+          size="large"
+          :loading="loading"
+          native-type="submit"
+          class="auth-submit-btn"
+        >
           {{ loading ? "注册中..." : "注 册" }}
         </el-button>
       </el-form-item>
-      <div class="form-footer">
+
+      <div class="auth-footer">
         已有账号？<router-link to="/login">立即登录</router-link>
       </div>
     </el-form>
@@ -89,7 +121,7 @@ const rules: FormRules = {
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
   company_name: [{ required: true, message: "请输入企业名称", trigger: "blur" }],
   email: [
-    { required: true, message: "请输入邮箱", trigger: "blur" },
+    { required: true, message: "请输入邮箱地址", trigger: "blur" },
     { type: "email", message: "邮箱格式不正确", trigger: "blur" },
   ],
   password: [
@@ -101,7 +133,6 @@ const rules: FormRules = {
   ],
 };
 
-// 密码变更时重新校验确认密码
 function onPasswordChange() {
   errorMessage.value = "";
   formRef.value?.validateField("confirmPassword");
@@ -130,18 +161,7 @@ async function handleRegister() {
 </script>
 
 <style scoped lang="scss">
-.w-full {
-  width: 100%;
-}
 .error-alert {
-  margin-bottom: 16px;
-}
-.form-footer {
-  text-align: center;
-  font-size: 13px;
-  color: #909399;
-  a {
-    color: #1e6fff;
-  }
+  margin-bottom: 20px;
 }
 </style>

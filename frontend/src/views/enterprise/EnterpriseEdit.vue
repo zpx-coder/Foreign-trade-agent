@@ -14,10 +14,12 @@
     <LoadingSkeleton v-if="loading" variant="form" />
 
     <template v-else>
-      <el-card class="section-card">
-        <template #header>
-          <span class="section-title">基本信息</span>
-        </template>
+      <div class="enterprise-content">
+        <div class="enterprise-main">
+          <el-card id="section-basic" class="section-card">
+            <template #header>
+              <span class="section-title">基本信息</span>
+            </template>
         <el-form
           ref="formRef"
           :model="form"
@@ -98,7 +100,7 @@
       </el-card>
 
       <!-- 外贸信息 -->
-      <el-card class="section-card">
+      <el-card id="section-trade" class="section-card">
         <template #header>
           <span class="section-title">外贸信息</span>
           <span class="section-subtitle">采购商关注的企业实力信息</span>
@@ -196,8 +198,17 @@
         </el-form>
       </el-card>
 
+      <!-- 产品管理（v1.5：从独立模块合并至企业资料） -->
+      <el-card id="section-products" class="section-card">
+        <template #header>
+          <span class="section-title">产品管理</span>
+          <span class="section-subtitle">管理企业产品信息，用于客户画像关联</span>
+        </template>
+        <EnterpriseProducts />
+      </el-card>
+
       <!-- 联系信息 -->
-      <el-card class="section-card">
+      <el-card id="section-contact" class="section-card">
         <template #header>
           <span class="section-title">联系信息</span>
         </template>
@@ -225,7 +236,7 @@
       </el-card>
 
       <!-- 企业图片 -->
-      <el-card class="section-card">
+      <el-card id="section-factory" class="section-card">
         <template #header>
           <span class="section-title">工厂实景</span>
           <span class="section-subtitle">展示生产环境、车间、仓库等</span>
@@ -239,7 +250,7 @@
         />
       </el-card>
 
-      <el-card class="section-card">
+      <el-card id="section-cert" class="section-card">
         <template #header>
           <span class="section-title">资质证件</span>
           <span class="section-subtitle">展示认证证书、营业执照、专利等</span>
@@ -252,16 +263,37 @@
           hint="建议上传 ISO、CE、FDA 等认证证书，尺寸不超过 5MB"
         />
       </el-card>
+
+        </div><!-- .enterprise-main -->
+
+        <!-- 右侧快速定位导航 -->
+        <aside class="enterprise-nav">
+          <nav class="section-nav" :class="{ 'section-nav--fixed': navFixed }">
+            <div class="section-nav__title">页面导航</div>
+            <a
+              v-for="s in sections"
+              :key="s.id"
+              class="section-nav__item"
+              :class="{ 'section-nav__item--active': activeSection === s.id }"
+              @click.prevent="scrollToSection(s.id)"
+            >
+              <span class="section-nav__dot" />
+              {{ s.label }}
+            </a>
+          </nav>
+        </aside>
+      </div><!-- .enterprise-content -->
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, onBeforeUnmount } from "vue";
 import { ElMessage, type FormInstance, type FormRules, type UploadFile } from "element-plus";
 import PageHeader from "@/components/common/PageHeader.vue";
 import LoadingSkeleton from "@/components/common/LoadingSkeleton.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
+import EnterpriseProducts from "./components/EnterpriseProducts.vue";
 import api from "@/api/client";
 import cities from "@/data/cities.json";
 
@@ -378,11 +410,168 @@ async function handleLogoUpload(file: UploadFile) {
 }
 
 onMounted(loadProfile);
+
+// ── 右侧快速定位导航 ──
+const sections = [
+  { id: "section-basic", label: "基本信息" },
+  { id: "section-trade", label: "外贸信息" },
+  { id: "section-products", label: "产品管理" },
+  { id: "section-contact", label: "联系信息" },
+  { id: "section-factory", label: "工厂实景" },
+  { id: "section-cert", label: "资质证件" },
+];
+
+const activeSection = ref("section-basic");
+const navFixed = ref(false);
+let observer: IntersectionObserver | null = null;
+
+function setupObserver() {
+  const elements = sections
+    .map((s) => document.getElementById(s.id))
+    .filter(Boolean) as HTMLElement[];
+
+  if (elements.length === 0) return;
+
+  observer = new IntersectionObserver(
+    (entries) => {
+      // 找到当前可见区域中第一个 section
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          activeSection.value = entry.target.id;
+          break;
+        }
+      }
+    },
+    {
+      rootMargin: "-10% 0px -80% 0px", // 顶部留 10% 余量，底部 80% 确保离顶部最近的 section 被激活
+      threshold: 0,
+    }
+  );
+
+  elements.forEach((el) => observer!.observe(el));
+}
+
+function scrollToSection(id: string) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    activeSection.value = id;
+  }
+}
+
+// 监听滚动以固定导航
+function handleScroll() {
+  navFixed.value = window.scrollY > 160;
+}
+
+onMounted(() => {
+  // 延迟初始化 Observer，等待 DOM 渲染完成
+  setTimeout(setupObserver, 300);
+  window.addEventListener("scroll", handleScroll, { passive: true });
+});
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  window.removeEventListener("scroll", handleScroll);
+});
 </script>
 
 <style scoped lang="scss">
 .enterprise-edit-page {
   padding: 0;
+}
+
+// ── 双栏布局 ──
+.enterprise-content {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+
+.enterprise-main {
+  flex: 1;
+  min-width: 0;
+}
+
+// ── 右侧导航 ──
+.enterprise-nav {
+  flex: 0 0 180px;
+  position: sticky;
+  top: 84px; // header height + padding
+}
+
+.section-nav {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf1;
+  padding: 18px 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .04);
+  transition: box-shadow .2s;
+
+  &--fixed {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .08);
+  }
+
+  &__title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    padding: 0 18px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 6px;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    font-size: 13px;
+    color: #64748b;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all .15s;
+    border-left: 2px solid transparent;
+    font-weight: 400;
+
+    &:hover {
+      color: #1e293b;
+      background: #f8fafc;
+    }
+
+    &--active {
+      color: #3b82f6;
+      font-weight: 600;
+      background: rgba(59, 130, 246, .05);
+      border-left-color: #3b82f6;
+
+      .section-nav__dot {
+        background: #3b82f6;
+        box-shadow: 0 0 6px rgba(59, 130, 246, .4);
+      }
+    }
+  }
+
+  &__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    flex-shrink: 0;
+    transition: all .15s;
+  }
+}
+
+@media (max-width: 1024px) {
+  .enterprise-content {
+    flex-direction: column;
+  }
+
+  .enterprise-nav {
+    display: none;
+  }
 }
 
 .section-card {

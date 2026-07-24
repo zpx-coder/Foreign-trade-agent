@@ -9,7 +9,7 @@
   >
     <p class="confirm-dialog__body">{{ message }}</p>
     <template #footer>
-      <el-button @click="$emit('cancel')">取消</el-button>
+      <el-button @click="$emit('cancel'); $emit('update:visible', false)">取消</el-button>
       <el-button :type="confirmType" :loading="loading" @click="$emit('confirm')">
         {{ confirmText }}
       </el-button>

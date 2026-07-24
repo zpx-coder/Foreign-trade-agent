@@ -1,5 +1,9 @@
 <template>
-  <AuthLayout subtitle="平台管理后台">
+  <AuthLayout>
+    <div class="auth-tabs">
+      <button class="auth-tab auth-tab--active">管理员登录</button>
+    </div>
+
     <el-alert
       v-if="errorMessage"
       :title="errorMessage"
@@ -12,25 +16,40 @@
 
     <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleLogin">
       <el-form-item prop="email">
-        <el-input v-model="form.email" placeholder="管理员邮箱" prefix-icon="Message" size="large" @input="errorMessage = ''" />
+        <el-input
+          v-model="form.email"
+          placeholder="请输入管理员邮箱"
+          prefix-icon="Message"
+          size="large"
+          @input="errorMessage = ''"
+        />
       </el-form-item>
+
       <el-form-item prop="password">
         <el-input
           v-model="form.password"
           type="password"
-          placeholder="密码"
+          placeholder="请输入密码"
           prefix-icon="Lock"
           size="large"
           show-password
           @input="errorMessage = ''"
         />
       </el-form-item>
+
       <el-form-item>
-        <el-button type="primary" size="large" :loading="loading" native-type="submit" class="w-full">
+        <el-button
+          type="primary"
+          size="large"
+          :loading="loading"
+          native-type="submit"
+          class="auth-submit-btn"
+        >
           {{ loading ? "登录中..." : "管理员登录" }}
         </el-button>
       </el-form-item>
-      <div class="form-footer">
+
+      <div class="auth-footer">
         <span>企业用户？</span><router-link to="/login">返回用户登录</router-link>
       </div>
     </el-form>
@@ -86,18 +105,7 @@ async function handleLogin() {
 </script>
 
 <style scoped lang="scss">
-.w-full {
-  width: 100%;
-}
 .error-alert {
-  margin-bottom: 16px;
-}
-.form-footer {
-  text-align: center;
-  font-size: 13px;
-  color: #909399;
-  a {
-    color: #1e6fff;
-  }
+  margin-bottom: 20px;
 }
 </style>
