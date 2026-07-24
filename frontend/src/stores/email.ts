@@ -8,6 +8,7 @@ export interface EmailTemplateItem {
   id: string;
   name: string;
   subject: string | null;
+  language: string | null;
   tone: string | null;
   cta_type: string | null;
   status: string;
@@ -23,6 +24,9 @@ export interface EmailTemplateDetail {
   subject: string | null;
   body_html: string | null;
   body_text: string | null;
+  body_html_foreign: string | null;
+  body_text_foreign: string | null;
+  language: string | null;
   tone: string | null;
   cta_type: string | null;
   key_points: string | null;
@@ -78,9 +82,17 @@ export interface SendLogItem {
   subject: string | null;
   status: string;
   tracking_id: string;
+  message_id: string | null;
   opened_at: string | null;
+  replied_at: string | null;
   error_message: string | null;
   created_at: string;
+  // 关联信息
+  contact_name: string | null;
+  contact_title: string | null;
+  customer_name: string | null;
+  customer_country: string | null;
+  customer_industry: string | null;
 }
 
 // ── Store ──

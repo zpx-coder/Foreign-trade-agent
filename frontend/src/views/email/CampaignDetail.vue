@@ -40,18 +40,42 @@
 
       <!-- 发送日志 -->
       <el-card class="table-card">
-        <template #header><span>发送日志</span></template>
+        <template #header><span>发送日志（{{ sendLogs.length }} 条）</span></template>
         <el-table :data="sendLogs" stripe max-height="500">
-          <el-table-column prop="recipient_email" label="收件人" min-width="200" />
-          <el-table-column prop="subject" label="邮件主题" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="status" label="状态" width="100" align="center">
+          <el-table-column label="收件人" min-width="140">
+            <template #default="{ row }">
+              <div class="recipient-info">
+                <div class="recipient-name">{{ row.contact_name || "—" }}</div>
+                <div class="recipient-email">{{ row.recipient_email }}</div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="公司" min-width="160">
+            <template #default="{ row }">
+              <div class="company-info">
+                <div class="company-name">{{ row.customer_name || "—" }}</div>
+                <div class="company-meta">
+                  <span v-if="row.customer_country">{{ row.customer_country }}</span>
+                  <span v-if="row.customer_industry" class="company-industry">{{ row.customer_industry }}</span>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="subject" label="邮件主题" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="status" label="状态" width="90" align="center">
             <template #default="{ row }"><StatusBadge :status="row.status" /></template>
           </el-table-column>
-          <el-table-column prop="opened_at" label="打开时间" width="160">
-            <template #default="{ row }">{{ row.opened_at ? new Date(row.opened_at).toLocaleString("zh-CN") : "—" }}</template>
+          <el-table-column label="发件时间" width="160">
+            <template #default="{ row }">{{ new Date(row.created_at).toLocaleString("zh-CN") }}</template>
           </el-table-column>
-          <el-table-column prop="error_message" label="备注" min-width="160" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.error_message || "—" }}</template>
+          <el-table-column prop="error_message" label="备注" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.status === 'replied' && row.replied_at" style="color:#22c55e">
+                已回复 {{ new Date(row.replied_at).toLocaleString("zh-CN") }}
+              </span>
+              <span v-else-if="row.error_message" style="color:#ef4444">{{ row.error_message }}</span>
+              <span v-else style="color:#94a3b8">—</span>
+            </template>
           </el-table-column>
         </el-table>
       </el-card>
@@ -130,5 +154,14 @@ onUnmounted(() => { if (pollTimer.value) clearInterval(pollTimer.value); });
   .stat-label { font-size: 13px; color: #94a3b8; margin-top: 4px; }
   .info-card { margin-bottom: 16px; border-radius: 12px; }
   .table-card { border-radius: 14px; border: 1px solid #e2e8f0; }
+  .recipient-info {
+    .recipient-name { font-weight: 500; color: #1e293b; font-size: 13px; }
+    .recipient-email { font-size: 12px; color: #94a3b8; }
+  }
+  .company-info {
+    .company-name { font-weight: 500; color: #1e293b; font-size: 13px; }
+    .company-meta { font-size: 12px; color: #64748b; display: flex; gap: 8px; }
+    .company-industry { color: #94a3b8; }
+  }
 }
 </style>

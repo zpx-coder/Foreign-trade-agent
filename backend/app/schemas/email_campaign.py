@@ -102,8 +102,16 @@ class SendLogResponse(BaseModel):
     subject: Optional[str] = None
     status: str
     tracking_id: uuid.UUID
+    message_id: Optional[str] = None
     opened_at: Optional[datetime] = None
+    replied_at: Optional[datetime] = None
     error_message: Optional[str] = None
     created_at: datetime
+    # 关联信息
+    contact_name: Optional[str] = None
+    contact_title: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_country: Optional[str] = None
+    customer_industry: Optional[str] = None
 
     model_config = {"from_attributes": True}

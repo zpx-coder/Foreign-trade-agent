@@ -106,6 +106,10 @@
             </el-select>
             <span class="cust-count">
               共 {{ filteredCustomers.length }} 个可选客户（已选 {{ wizard.customerIds.length }} 个）
+              <template v-if="customers.length > 0">
+                · 总计 {{ customers.length }} 个客户，
+                <span style="color:#f59e0b">{{ customers.length - customers.filter(c => c.contacts_with_email_count > 0).length }} 个</span> 无邮箱联系人暂不可选
+              </template>
             </span>
           </div>
 
@@ -122,10 +126,18 @@
             <el-table-column prop="country" label="国家" width="100">
               <template #default="{ row }">{{ row.country || "—" }}</template>
             </el-table-column>
-            <el-table-column prop="contacts_count" label="联系人" width="80" align="center" />
+            <el-table-column label="有邮箱联系人" width="120" align="center">
+                <template #default="{ row }">
+                  <span :style="{ color: row.contacts_with_email_count > 0 ? '#10b981' : '#ef4444' }">
+                    {{ row.contacts_with_email_count }}/{{ row.contacts_count }}
+                  </span>
+                </template>
+              </el-table-column>
           </el-table>
-          <EmptyState v-else-if="customersLoaded"
-            description="没有符合筛选条件的客户（需要有联系人的客户才能发送邮件）" />
+          <EmptyState v-else-if="customersLoaded && customers.length === 0"
+            description="暂无客户数据，请先在客户管理中搜索并添加客户" />
+          <EmptyState v-else-if="customersLoaded && filteredCustomers.length === 0"
+            description="所有客户均无邮箱联系人，无法发送邮件。请在客户详情页为相关客户添加联系人邮箱" />
         </template>
       </div>
 
@@ -226,7 +238,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import { Plus } from "@element-plus/icons-vue";
@@ -246,6 +258,25 @@ const page = ref(1); const pageSize = ref(20);
 
 function loadData() { store.fetchCampaigns({ page: page.value, page_size: pageSize.value }); }
 function goDetail(id: string) { router.push(`/app/email/campaigns/${id}`); }
+
+// ── 自动轮询：有发送中的任务时每 3 秒刷新进度 ──
+const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null);
+const hasSending = computed(() => store.campaigns.some(c => c.status === "sending"));
+
+function startPolling() {
+  if (pollingTimer.value) return;
+  pollingTimer.value = setInterval(() => {
+    if (!hasSending.value) { stopPolling(); return; }
+    loadData();
+  }, 3000);
+}
+
+function stopPolling() {
+  if (pollingTimer.value) { clearInterval(pollingTimer.value); pollingTimer.value = null; }
+}
+
+watch(hasSending, (val) => { if (val) startPolling(); else stopPolling(); });
+onBeforeUnmount(stopPolling);
 
 // ── 创建向导 ──
 const tplOptions = ref<EmailTemplateItem[]>([]);
@@ -294,7 +325,7 @@ const countryOptions = computed(() => {
 
 // 筛选客户（必须有联系人邮箱）
 const filteredCustomers = computed(() => {
-  let list = customers.value.filter(c => c.contacts_count > 0);
+  let list = customers.value.filter(c => c.contacts_with_email_count > 0);
   if (customerSearch.value) {
     const q = customerSearch.value.toLowerCase();
     list = list.filter(c => c.name.toLowerCase().includes(q) || (c.industry || "").toLowerCase().includes(q));
@@ -330,7 +361,7 @@ async function loadCustomers() {
   wizard.custLoading = true;
   customersLoaded.value = false;
   try {
-    await customerStore.fetchList({ page_size: 100 });
+    await customerStore.fetchList({ page_size: 500 });
     customers.value = customerStore.list;
     customersLoaded.value = true;
   } catch (err: any) {
@@ -379,16 +410,28 @@ async function handleCreate() {
   }
   creating.value = true;
   try {
+    const selectedTpl = tplOptions.value.find(t => t.id === wizard.templateId);
+    const tplName = selectedTpl?.name || "未命名模板";
+    const now = new Date();
+    const timeStr = `${now.toLocaleDateString("zh-CN")} ${now.toTimeString().slice(0, 5)}`;
     const payload = {
-      name: `发送任务 ${new Date().toLocaleDateString("zh-CN")}`,
+      name: `${tplName} — ${timeStr}`,
       template_id: wizard.templateId,
       customer_ids: wizard.customerIds,
       smtp_config: { ...wizard.smtp },
     };
-    await store.createCampaign(payload);
+    const campaign = await store.createCampaign(payload);
     wizard.visible = false;
-    ElMessage.success("发送任务已创建");
+    ElMessage.success("发送任务已创建，正在启动发送...");
     loadData();
+    // 创建后直接发送，无需到列表页再操作
+    try {
+      await store.sendCampaign(campaign.id);
+      ElMessage.success("发送已启动");
+      loadData();
+    } catch {
+      // sendCampaign 错误已由拦截器处理
+    }
   } catch {
     // 错误提示已由 API 拦截器统一翻译并展示，此处仅恢复按钮状态
   } finally {

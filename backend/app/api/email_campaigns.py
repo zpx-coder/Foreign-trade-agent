@@ -61,6 +61,22 @@ async def list_campaigns(
     db: AsyncSession = Depends(get_db),
 ):
     """发送任务列表"""
+    # 自动修复僵尸任务：已发完但状态卡在 sending
+    stuck_fix_result = await db.execute(
+        select(EmailCampaign).where(
+            EmailCampaign.tenant_id == current_user.tenant_id,
+            EmailCampaign.status == "sending",
+            EmailCampaign.sent_count >= EmailCampaign.total_recipients,
+            EmailCampaign.total_recipients > 0,
+        )
+    )
+    for stuck in stuck_fix_result.scalars().all():
+        stuck.status = "completed"
+        stuck.completed_at = datetime.now(timezone.utc)
+        logger.warning(f"Auto-fixed stuck campaign {stuck.id}: {stuck.name}")
+    if stuck_fix_result.scalars().all():
+        await db.commit()
+
     conditions = [EmailCampaign.tenant_id == current_user.tenant_id]
     if status:
         conditions.append(EmailCampaign.status == status)
@@ -185,7 +201,12 @@ async def get_campaign(
     uid = _parse_uuid(campaign_id, "任务ID")
     result = await db.execute(
         select(EmailCampaign)
-        .options(selectinload(EmailCampaign.send_logs))
+        .options(
+            selectinload(EmailCampaign.send_logs)
+            .selectinload(SendLog.contact),
+            selectinload(EmailCampaign.send_logs)
+            .selectinload(SendLog.customer),
+        )
         .where(
             EmailCampaign.id == uid,
             EmailCampaign.tenant_id == current_user.tenant_id,
@@ -195,11 +216,24 @@ async def get_campaign(
     if not campaign:
         raise HTTPException(status_code=404, detail="任务不存在")
 
+    # 构建含关联信息的发送日志
+    logs_with_info = []
+    for log in (campaign.send_logs or []):
+        log_data = SendLogResponse.model_validate(log).model_dump()
+        if log.contact:
+            log_data["contact_name"] = log.contact.name
+            log_data["contact_title"] = log.contact.title
+        if log.customer:
+            log_data["customer_name"] = log.customer.name
+            log_data["customer_country"] = log.customer.country
+            log_data["customer_industry"] = log.customer.industry
+        logs_with_info.append(log_data)
+
     return CampaignDetailResponse(
         **CampaignResponse.model_validate(campaign).model_dump(),
         smtp_config=campaign.smtp_config,
         customer_ids=campaign.customer_ids,
-        send_logs=[SendLogResponse.model_validate(log) for log in (campaign.send_logs or [])],
+        send_logs=logs_with_info,
     )
 
 
@@ -359,9 +393,13 @@ async def preview_campaign(
         "产品图片": product_image_url,
     }
 
+    # 优先使用外语版本（如果模板设置了语言且有外语内容）
+    use_html = (template.body_html_foreign if template.language and template.body_html_foreign else template.body_html) or ""
+    use_text = (template.body_text_foreign if template.language and template.body_text_foreign else template.body_text) or ""
+
     subject = render_template(template.subject or "Business Inquiry", variables)
-    body_html = render_template(template.body_html, variables)
-    body_text = render_template(template.body_text or "", variables)
+    body_html = render_template(use_html, variables)
+    body_text = render_template(use_text, variables)
 
     return PreviewResponse(subject=subject, body_html=body_html, body_text=body_text)
 
@@ -495,8 +533,9 @@ async def send_campaign(
     # 后台发送
     smtp_config = campaign.smtp_config
     template_subject = template.subject or ""
-    template_html = template.body_html
-    template_text = template.body_text or ""
+    # 优先使用外语版本（如果模板设置了语言且有外语内容）
+    template_html = (template.body_html_foreign if template.language and template.body_html_foreign else template.body_html) or ""
+    template_text = (template.body_text_foreign if template.language and template.body_text_foreign else template.body_text) or ""
 
     async def background_send():
         try:
@@ -557,6 +596,8 @@ async def send_campaign(
                 async for sess in get_session():
                     log_entry = await sess.get(SendLog, log.id)
                     if log_entry:
+                        # 存 Message-ID 供 IMAP 回复匹配
+                        log_entry.message_id = result.get("message_id")
                         if result["success"]:
                             log_entry.status = "sent"
                         else:
@@ -740,8 +781,9 @@ async def resume_campaign(
 
     smtp_config = campaign.smtp_config
     template_subject = template.subject or ""
-    template_html = template.body_html
-    template_text = template.body_text or ""
+    # 优先使用外语版本（如果模板设置了语言且有外语内容）
+    template_html = (template.body_html_foreign if template.language and template.body_html_foreign else template.body_html) or ""
+    template_text = (template.body_text_foreign if template.language and template.body_text_foreign else template.body_text) or ""
 
     async def background_resume():
         try:
@@ -797,6 +839,7 @@ async def resume_campaign(
                 async for sess in get_session():
                     log_entry = await sess.get(SendLog, log.id)
                     if log_entry:
+                        log_entry.message_id = result.get("message_id")
                         if result["success"]:
                             log_entry.status = "sent"
                         else:

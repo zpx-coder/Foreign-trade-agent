@@ -40,10 +40,20 @@ const STATUS_MAP: Record<string, { type: "success" | "info" | "warning" | "dange
   linkedin_search: { type: "", label: "LinkedIn 搜索" },
   duckduckgo_search: { type: "", label: "DuckDuckGo 搜索" },
   // 邮件
+  draft: { type: "info", label: "草稿" },
+  ready: { type: "success", label: "就绪" },
   sending: { type: "warning", label: "发送中" },
+  paused: { type: "warning", label: "已暂停" },
+  pending: { type: "info", label: "待发送" },
   sent: { type: "success", label: "已发送" },
+  delivered: { type: "success", label: "已送达" },
+  opened: { type: "", label: "已打开" },
+  replied: { type: "success", label: "已回复" },
+  bounced: { type: "danger", label: "退信" },
   failed: { type: "danger", label: "失败" },
   cancelled: { type: "info", label: "已取消" },
+  generating: { type: "warning", label: "生成中" },
+  completed: { type: "success", label: "已完成" },
 };
 
 const props = withDefaults(
