@@ -26,7 +26,7 @@ from app.schemas.email_template import (
     TestSendRequest,
 )
 from app.services.ai_service import AIServiceError, get_ai_service
-from app.services.ai.email_generator import EmailGenerator
+from app.services.ai.email_generator import EmailGenerator, html_to_plain_text
 from app.services.email_sender import send_email
 
 logger = logging.getLogger(__name__)
@@ -247,6 +247,9 @@ async def generate_template(
             return
 
         output = generator.get_output()
+        foreign_html = ""
+        foreign_text = ""
+        subjects_foreign = []
         if output and not output.get("parse_error"):
             # 保存生成结果
             async for sess in get_session():
@@ -254,15 +257,134 @@ async def generate_template(
                 if tpl:
                     tpl.subject = output.get("subjects", [""])[0] if output.get("subjects") else ""
                     tpl.body_html = output.get("body_html")
-                    tpl.body_text = output.get("body_text")
+                    tpl.body_text = html_to_plain_text(output.get("body_html") or "")
                     tpl.spam_score = output.get("spam_score")
                     tpl.read_time_seconds = output.get("read_time_seconds")
                     tpl.output_data = output
-                    tpl.status = "ready"
                     await sess.commit()
-                    yield f"data: {json.dumps({'type': 'complete', 'template_id': str(uid), 'subjects': output.get('subjects', []), 'body_html': output.get('body_html', ''), 'body_text': output.get('body_text', ''), 'spam_score': output.get('spam_score'), 'read_time_seconds': output.get('read_time_seconds')}, ensure_ascii=False)}\n\n"
+
+            # 如果选择了语言，自动翻译为外语版本
+            language = (template.input_data or {}).get("language", "").strip()
+            if language and output.get("body_html"):
+                yield f"data: {json.dumps({'type': 'progress', 'message': f'正在翻译为{language}版本...'}, ensure_ascii=False)}\n\n"
+                try:
+                    subjects_cn = output.get("subjects") or []
+                    async for chunk in generator.translate(
+                        output.get("body_html", ""),
+                        language,
+                        subjects_cn,
+                    ):
+                        yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+                    foreign = generator.get_translate_output()
+                    foreign_html = foreign.get("body_html_foreign", "") if foreign else ""
+                    foreign_text = foreign.get("body_text_foreign", "") if foreign else ""
+                    subjects_foreign = foreign.get("subjects_foreign", []) if foreign else []
+
+                    # 用翻译后的第一个主题作为默认主题
+                    translated_subject = subjects_foreign[0] if subjects_foreign else ""
+
+                    async for sess in get_session():
+                        tpl = await sess.get(EmailTemplate, uid)
+                        if tpl:
+                            tpl.body_html_foreign = foreign_html
+                            tpl.body_text_foreign = foreign_text
+                            tpl.language = language
+                            tpl.status = "ready"
+                            if translated_subject:
+                                tpl.subject = translated_subject
+                            # 将翻译后的主题存入 output_data
+                            if tpl.output_data:
+                                tpl.output_data["subjects_foreign"] = subjects_foreign
+                            await sess.commit()
+                except AIServiceError as e:
+                    # 翻译失败不阻断流程，中文版已保存
+                    yield f"data: {json.dumps({'type': 'translate_error', 'message': f'翻译失败: {e}'}, ensure_ascii=False)}\n\n"
+            else:
+                # 无语言选择，直接标记完成
+                async for sess in get_session():
+                    tpl = await sess.get(EmailTemplate, uid)
+                    if tpl and tpl.status != "ready":
+                        tpl.status = "ready"
+                        await sess.commit()
+
+            yield f"data: {json.dumps({'type': 'complete', 'template_id': str(uid), 'subjects': output.get('subjects', []), 'subjects_foreign': subjects_foreign, 'body_html': output.get('body_html', ''), 'body_text': html_to_plain_text(output.get('body_html') or ''), 'body_html_foreign': foreign_html, 'body_text_foreign': foreign_text, 'language': language, 'spam_score': output.get('spam_score'), 'read_time_seconds': output.get('read_time_seconds')}, ensure_ascii=False)}\n\n"
         else:
             yield f"data: {json.dumps({'type': 'error', 'message': 'AI 生成失败，请重试'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── 重新翻译 ──
+
+@router.post("/{template_id}/translate")
+async def translate_template(
+    template_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE 端点：将中文模板重新翻译为外语版本"""
+    uid = _parse_uuid(template_id, "模板ID")
+    result = await db.execute(
+        select(EmailTemplate).where(
+            EmailTemplate.id == uid,
+            EmailTemplate.tenant_id == current_user.tenant_id,
+        )
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    if not template.body_html:
+        raise HTTPException(status_code=400, detail="模板尚未生成中文内容")
+    if not template.language:
+        raise HTTPException(status_code=400, detail="模板未设置目标语言")
+
+    language = template.language
+    body_html = template.body_html or ""
+    # 读取中文主题用于翻译
+    subjects_cn = (template.output_data or {}).get("subjects", []) or []
+
+    async def event_stream():
+        ai_service = get_ai_service()
+        generator = EmailGenerator(ai_service)
+
+        yield f"data: {json.dumps({'type': 'progress', 'message': f'正在翻译为{language}版本...'}, ensure_ascii=False)}\n\n"
+
+        foreign_html = ""
+        foreign_text = ""
+        subjects_foreign = []
+        try:
+            async for chunk in generator.translate(body_html, language, subjects_cn):
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+            foreign = generator.get_translate_output()
+            if foreign:
+                foreign_html = foreign.get("body_html_foreign", "")
+                foreign_text = foreign.get("body_text_foreign", "")
+                subjects_foreign = foreign.get("subjects_foreign", [])
+
+            async for sess in get_session():
+                tpl = await sess.get(EmailTemplate, uid)
+                if tpl:
+                    tpl.body_html_foreign = foreign_html
+                    tpl.body_text_foreign = foreign_text
+                    if subjects_foreign:
+                        tpl.subject = subjects_foreign[0]
+                        if tpl.output_data:
+                            tpl.output_data["subjects_foreign"] = subjects_foreign
+                    await sess.commit()
+
+            yield f"data: {json.dumps({'type': 'translated', 'subjects_foreign': subjects_foreign, 'body_html_foreign': foreign_html, 'body_text_foreign': foreign_text, 'language': language}, ensure_ascii=False)}\n\n"
+        except AIServiceError as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'翻译失败: {e}'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -317,7 +439,9 @@ async def test_send(
     }
 
     from app.services.email_sender import render_template
-    html_body = render_template(template.body_html, variables)
+    # 优先使用外语版本（如果模板设置了语言且有外语内容）
+    use_html = (template.body_html_foreign if template.language and template.body_html_foreign else template.body_html) or ""
+    html_body = render_template(use_html, variables)
     subject = render_template(template.subject or "Test", variables)
 
     return {

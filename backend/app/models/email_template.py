@@ -34,8 +34,11 @@ class EmailTemplate(Base):
     subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     body_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     body_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    body_html_foreign: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    body_text_foreign: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # ── 生成参数 ──
+    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="en")
     tone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     cta_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     key_points: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

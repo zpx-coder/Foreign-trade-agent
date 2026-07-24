@@ -11,6 +11,20 @@ from typing import AsyncIterator, Dict, Any, Optional
 from app.services.ai_service import AIService
 
 
+def html_to_plain_text(html: str) -> str:
+    """从 HTML 中提取纯文本：去除标签，合并空白，解码常见实体"""
+    if not html:
+        return ""
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&amp;", "&", text)
+    text = re.sub(r"&lt;", "<", text)
+    text = re.sub(r"&gt;", ">", text)
+    text = re.sub(r"&quot;", '"', text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
 EMAIL_SYSTEM_PROMPT = """你是一位资深的 B2B 外贸邮件营销专家。你的任务是根据给定的客户画像、产品信息和营销要求，撰写一封高转化率的商务开发邮件。
 
 ## 邮件撰写原则
@@ -66,7 +80,6 @@ EMAIL_SYSTEM_PROMPT = """你是一位资深的 B2B 外贸邮件营销专家。�
     "主题方案3 — 简洁直接"
   ],
   "body_html": "<p>HTML 格式的邮件正文，使用 {{ 变量名 }} 占位符。在适合的位置插入 {{ 企业Logo }} 和 {{ 产品图片 }}</p>",
-  "body_text": "纯文本版本的邮件正文（不含图片）",
   "spam_score": 3,
   "read_time_seconds": 45
 }
@@ -116,6 +129,38 @@ CTA_LABELS = {
     "website": "访问我方网站了解详情",
     "catalog": "索取产品目录/样品",
 }
+
+
+# ── 语言标签 ──
+
+LANGUAGE_LABELS = {
+    "en": "英文 (English)",
+    "es": "西班牙语 (Español)",
+    "ru": "俄语 (Русский)",
+}
+
+TRANSLATE_SYSTEM_PROMPT = """你是一位专业的外贸邮件翻译专家。你的任务是将中文商务开发邮件**精确翻译**为{target_language}。
+
+## 翻译要求
+
+1. **保留 HTML 标签**：所有 HTML 标签（<p>, <b>, <ul>, <li>, <table>, <img> 等）必须原样保留，只翻译标签内的文本内容
+2. **保留变量占位符**：所有 `{{{{ 变量名 }}}}` 格式的占位符必须原样保留，不要翻译或修改
+3. **保留图片占位符**：`{{{{ 企业Logo }}}}`、`{{{{ 产品图片 }}}}` 原样保留
+4. **专业术语准确**：外贸行业术语（FOB, MOQ, OEM, ISO 等）使用国际通用表达
+5. **语气一致**：保持与原文相同的商务正式程度
+6. **输出格式**：先输出翻译后的主题（每行一个，以 `## 主题` 开头），再输出翻译后的 HTML（以 `## HTML` 开头）
+
+请严格按照格式输出，不要用代码块包裹。"""
+
+TRANSLATE_USER_PROMPT = """请将以下中文邮件内容翻译为{target_language}。
+
+## 主题
+
+{subjects}
+
+## HTML
+
+{body_html}"""
 
 
 class EmailGenerator:
@@ -210,6 +255,90 @@ class EmailGenerator:
             }
 
         yield {"type": "done"}
+
+    async def translate(
+        self, body_html: str, language: str, subjects: list = None
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """将中文模板翻译为目标语言，保留 HTML 标签和变量占位符。
+        如果提供了 subjects，同时翻译邮件主题列表。"""
+        subjects = subjects or []
+        lang_label = LANGUAGE_LABELS.get(language, language)
+        system_prompt = TRANSLATE_SYSTEM_PROMPT.format(target_language=lang_label)
+        subjects_text = "\n".join(subjects) if subjects else "（无）"
+        user_prompt = TRANSLATE_USER_PROMPT.format(
+            target_language=lang_label,
+            subjects=subjects_text,
+            body_html=body_html or "",
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        self._translate_accumulated = ""
+        async for token in self.ai_service.chat_stream(
+            messages, temperature=0.3, max_tokens=4096
+        ):
+            self._translate_accumulated += token
+            yield {"type": "translate_text", "content": token}
+
+        # 解析翻译结果：提取主题和 HTML
+        foreign_subjects, foreign_html = self._parse_translation(
+            self._translate_accumulated
+        )
+        foreign_text = html_to_plain_text(foreign_html)
+        yield {
+            "type": "translated",
+            "subjects_foreign": foreign_subjects,
+            "body_html_foreign": foreign_html,
+            "body_text_foreign": foreign_text,
+        }
+
+    def _parse_translation(self, text: str) -> tuple:
+        """从翻译结果中提取主题列表和 HTML"""
+        subjects_foreign = []
+        body_html_foreign = ""
+
+        # 匹配 "## 主题" 段落
+        subj_match = re.search(
+            r"##\s*主题\s*\n(.*?)(?=##\s*HTML|\Z)",
+            text, re.DOTALL | re.IGNORECASE
+        )
+        if subj_match:
+            subj_block = subj_match.group(1).strip()
+            # 按行提取，去掉序号和前缀
+            for line in subj_block.split("\n"):
+                line = re.sub(r"^[\d\-\.•]+\s*", "", line).strip()
+                if line:
+                    subjects_foreign.append(line)
+
+        # 匹配 "## HTML" 段落
+        html_match = re.search(
+            r"##\s*HTML\s*\n(.*?)$",
+            text, re.DOTALL | re.IGNORECASE
+        )
+        if html_match:
+            body_html_foreign = html_match.group(1).strip()
+        else:
+            # 如果没有分段标记，整个文本作为 HTML
+            body_html_foreign = text.strip()
+
+        # 去掉可能的代码块包裹
+        body_html_foreign = re.sub(r"^```(?:html)?\s*", "", body_html_foreign)
+        body_html_foreign = re.sub(r"\s*```$", "", body_html_foreign)
+        body_text_foreign = html_to_plain_text(body_html_foreign)
+        return subjects_foreign, body_html_foreign
+
+    def get_translate_output(self) -> Optional[Dict[str, Any]]:
+        """获取翻译后的完整输出"""
+        if hasattr(self, "_translate_accumulated"):
+            subjects, html_body = self._parse_translation(self._translate_accumulated)
+            return {
+                "subjects_foreign": subjects,
+                "body_html_foreign": html_body,
+                "body_text_foreign": html_to_plain_text(html_body),
+            }
+        return None
 
     def get_output(self) -> Optional[Dict[str, Any]]:
         """获取解析后的完整输出"""

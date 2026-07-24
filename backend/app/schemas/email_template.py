@@ -13,6 +13,7 @@ class EmailTemplateCreateRequest(BaseModel):
     subject: Optional[str] = Field(default=None, max_length=500)
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    language: Optional[str] = Field(default="en", max_length=20)
     tone: Optional[str] = Field(default=None, max_length=50)
     cta_type: Optional[str] = Field(default=None, max_length=50)
     key_points: Optional[str] = None
@@ -27,6 +28,9 @@ class EmailTemplateUpdateRequest(BaseModel):
     subject: Optional[str] = Field(default=None, max_length=500)
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    body_html_foreign: Optional[str] = None
+    body_text_foreign: Optional[str] = None
+    language: Optional[str] = Field(default=None, max_length=20)
     tone: Optional[str] = Field(default=None, max_length=50)
     cta_type: Optional[str] = Field(default=None, max_length=50)
     key_points: Optional[str] = None
@@ -42,6 +46,9 @@ class EmailTemplateResponse(BaseModel):
     subject: Optional[str] = None
     body_html: Optional[str] = None
     body_text: Optional[str] = None
+    body_html_foreign: Optional[str] = None
+    body_text_foreign: Optional[str] = None
+    language: Optional[str] = None
     tone: Optional[str] = None
     cta_type: Optional[str] = None
     key_points: Optional[str] = None
@@ -62,6 +69,7 @@ class EmailTemplateListItem(BaseModel):
     id: uuid.UUID
     name: str
     subject: Optional[str] = None
+    language: Optional[str] = None
     tone: Optional[str] = None
     cta_type: Optional[str] = None
     status: str

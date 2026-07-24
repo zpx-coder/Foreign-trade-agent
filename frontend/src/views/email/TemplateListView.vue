@@ -94,6 +94,15 @@
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col :span="4">
+            <el-form-item label="语言">
+              <el-select v-model="form.language" style="width:100%">
+                <el-option label="英文" value="en" />
+                <el-option label="西语" value="es" />
+                <el-option label="俄语" value="ru" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
@@ -125,11 +134,16 @@
         <el-divider content-position="left">生成结果</el-divider>
 
         <!-- 主题选择 -->
-        <div v-if="genOutput.subjects?.length" class="subject-select">
+        <div v-if="displaySubjects.length" class="subject-select">
           <span class="section-title">选择邮件主题：</span>
           <el-radio-group v-model="selectedSubjectIndex" @change="onSubjectChange">
-            <div v-for="(s, i) in genOutput.subjects" :key="i" class="subject-radio">
-              <el-radio :label="i">{{ s }}</el-radio>
+            <div v-for="(s, i) in displaySubjects" :key="i" class="subject-radio">
+              <el-radio :label="i">
+                <div class="subject-line">{{ s }}</div>
+                <div v-if="genOutput.subjects_foreign?.length && genOutput.subjects?.[i]" class="subject-cn-ref">
+                  {{ genOutput.subjects[i] }}
+                </div>
+              </el-radio>
             </div>
           </el-radio-group>
         </div>
@@ -146,18 +160,38 @@
 
         <!-- 邮件预览 + 编辑 -->
         <el-tabs v-model="previewTab" style="margin-top:12px">
-          <el-tab-pane label="邮件预览" name="preview">
+          <el-tab-pane v-if="genOutput.body_html_foreign" label="邮件原文预览" name="foreign">
+            <div class="email-preview" v-html="foreignHtmlPreview"></div>
+          </el-tab-pane>
+          <el-tab-pane label="中文版本预览" name="preview">
             <div class="email-preview" v-html="editedBodyHtml || genHtmlBody"></div>
           </el-tab-pane>
-          <el-tab-pane label="HTML 源码" name="html">
+          <el-tab-pane label="HTML源码" name="html">
             <el-input v-model="editedBodyHtml" type="textarea" :rows="14"
               :placeholder="genHtmlBody" />
           </el-tab-pane>
-          <el-tab-pane label="纯文本" name="text">
+          <el-tab-pane label="中文纯文本" name="text">
             <el-input v-model="editedBodyText" type="textarea" :rows="14"
               :placeholder="genOutput.body_text || ''" />
           </el-tab-pane>
+          <el-tab-pane v-if="genOutput.body_html_foreign" label="外语纯文本" name="foreign_text">
+            <el-input v-model="editedForeignText" type="textarea" :rows="14" />
+          </el-tab-pane>
         </el-tabs>
+
+        <!-- 重新翻译 -->
+        <div v-if="genOutput.body_html_foreign && !translating" style="margin-top:8px;text-align:right">
+          <el-button link type="primary" size="small" @click="handleRetranslate">
+            修改中文后，重新翻译为{{ languageLabel(genOutput.language) }}
+          </el-button>
+        </div>
+        <div v-if="translating" class="gen-panel" style="margin-top:8px">
+          <div class="gen-header">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            <span>正在翻译...</span>
+          </div>
+          <div v-if="streamText" class="stream-content"><pre>{{ streamText }}</pre></div>
+        </div>
       </div>
 
       <!-- 错误 -->
@@ -196,9 +230,10 @@ const store = useEmailStore();
 const page = ref(1); const pageSize = ref(20);
 function loadData() { store.fetchTemplates({ page: page.value, page_size: pageSize.value }); }
 function toneLabel(t: string | null) { const m: Record<string, string> = { formal: "正式", friendly: "友好", concise: "简洁" }; return t ? m[t] || t : "—"; }
+function languageLabel(l: string | null) { const m: Record<string, string> = { en: "English", es: "Español", ru: "Русский" }; return l ? m[l] || l : "English"; }
 
 const formRef = ref();
-const EMPTY = { name: "", icp_id: "", product_id: "", tone: "friendly", cta_type: "reply", key_points: "", reference_email: "" };
+const EMPTY = { name: "", icp_id: "", product_id: "", language: "en", tone: "friendly", cta_type: "reply", key_points: "", reference_email: "" };
 const form = reactive({ ...EMPTY });
 const dialog = reactive({ visible: false, isEdit: false });
 const currentId = ref<string | null>(null);
@@ -216,9 +251,18 @@ const streamText = ref("");
 const selectedSubjectIndex = ref(0);
 const editedBodyHtml = ref("");
 const editedBodyText = ref("");
+const editedForeignHtml = ref("");
+const editedForeignText = ref("");
+const translating = ref(false);
 const previewTab = ref("preview");
 
 // 计算当前选中的 HTML 预览
+// 显示的主题列表：优先使用翻译后的外语主题
+const displaySubjects = computed(() => {
+  if (genOutput.value?.subjects_foreign?.length) return genOutput.value.subjects_foreign;
+  return genOutput.value?.subjects || [];
+});
+
 const genHtmlBody = computed(() => {
   let raw = editedBodyHtml.value || genOutput.value?.body_html || "";
   // 图片占位符：替换为可视化占位框
@@ -229,6 +273,21 @@ const genHtmlBody = computed(() => {
     '<div style="text-align:center;padding:16px;margin:8px 0;background:#fefce8;border:2px dashed #fde68a;border-radius:8px">'
     + '<span style="color:#a16207;font-size:12px">📦 产品图片（发送时自动替换）</span></div>');
   // 其他变量高亮
+  raw = raw.replace(/\{\{\s*(.+?)\s*\}\}/g,
+    '<span style="background:#dbeafe;color:#1d4ed8;padding:0 3px;border-radius:2px">{{ $1 }}</span>');
+  return raw;
+});
+
+// 计算外语版 HTML 预览
+const foreignHtmlPreview = computed(() => {
+  let raw = editedForeignHtml.value || genOutput.value?.body_html_foreign || "";
+  // 图片占位符
+  raw = raw.replace(/\{\{\s*企业Logo\s*\}\}/g,
+    '<div style="text-align:center;padding:12px;margin:8px 0;background:#f0f9ff;border:2px dashed #bae6fd;border-radius:8px">'
+    + '<span style="color:#0369a1;font-size:12px">📷 Company Logo</span></div>');
+  raw = raw.replace(/\{\{\s*产品图片\s*\}\}/g,
+    '<div style="text-align:center;padding:16px;margin:8px 0;background:#fefce8;border:2px dashed #fde68a;border-radius:8px">'
+    + '<span style="color:#a16207;font-size:12px">📦 Product Image</span></div>');
   raw = raw.replace(/\{\{\s*(.+?)\s*\}\}/g,
     '<span style="background:#dbeafe;color:#1d4ed8;padding:0 3px;border-radius:2px">{{ $1 }}</span>');
   return raw;
@@ -252,13 +311,25 @@ async function openEdit(id: string) {
   try {
     const d = await store.fetchTemplate(id);
     form.name = d.name; form.icp_id = d.icp_id || ""; form.product_id = d.product_id || "";
-    form.tone = d.tone || "friendly"; form.cta_type = d.cta_type || "reply";
+    form.language = d.language || "en"; form.tone = d.tone || "friendly"; form.cta_type = d.cta_type || "reply";
     form.key_points = d.key_points || ""; form.reference_email = "";
     if (d.status === "ready" && d.output_data) {
       genOutput.value = d.output_data as any;
+      // 合并 foreign 字段到 genOutput（如果 output_data 里没有的话，从模板详情获取）
+      if (!genOutput.value.body_html_foreign && d.body_html_foreign) {
+        genOutput.value.body_html_foreign = d.body_html_foreign;
+      }
+      if (!genOutput.value.body_text_foreign && d.body_text_foreign) {
+        genOutput.value.body_text_foreign = d.body_text_foreign;
+      }
+      if (!genOutput.value.language && d.language) {
+        genOutput.value.language = d.language;
+      }
       generated.value = true;
       if ((d.output_data as any).body_html) editedBodyHtml.value = (d.output_data as any).body_html;
       if ((d.output_data as any).body_text) editedBodyText.value = (d.output_data as any).body_text;
+      if (d.body_html_foreign) editedForeignHtml.value = d.body_html_foreign;
+      if (d.body_text_foreign) editedForeignText.value = d.body_text_foreign;
     }
   } catch { /* */ }
   dialog.visible = true; await loadOptions();
@@ -267,7 +338,9 @@ async function openEdit(id: string) {
 function resetGenState() {
   generating.value = false; generated.value = false; genError.value = null;
   genOutput.value = null; streamText.value = ""; selectedSubjectIndex.value = 0;
-  editedBodyHtml.value = ""; editedBodyText.value = ""; previewTab.value = "preview";
+  editedBodyHtml.value = ""; editedBodyText.value = "";
+  editedForeignHtml.value = ""; editedForeignText.value = "";
+  translating.value = false; previewTab.value = "preview";
 }
 
 function resetDialog() { Object.assign(form, { ...EMPTY }); resetGenState(); }
@@ -278,11 +351,13 @@ function buildPayload(): Record<string, unknown> {
     if (k === "reference_email") continue;
     if (v !== "" && v !== null) payload[k] = v;
   }
-  if (genOutput.value?.subjects?.length && selectedSubjectIndex.value >= 0) {
-    payload.subject = genOutput.value.subjects[selectedSubjectIndex.value];
+  if (displaySubjects.value.length && selectedSubjectIndex.value >= 0) {
+    payload.subject = displaySubjects.value[selectedSubjectIndex.value];
   }
   if (editedBodyHtml.value) payload.body_html = editedBodyHtml.value;
   if (editedBodyText.value) payload.body_text = editedBodyText.value;
+  if (editedForeignHtml.value) payload.body_html_foreign = editedForeignHtml.value;
+  if (editedForeignText.value) payload.body_text_foreign = editedForeignText.value;
   return payload;
 }
 
@@ -336,11 +411,15 @@ async function handleGenerate() {
             const evt = JSON.parse(line.slice(6));
             if (evt.type === "text") {
               streamText.value += evt.content || "";
-            } else if (evt.type === "complete") {
+            } else if (evt.type === "translate_text") {
+              streamText.value += evt.content || "";
+            } else if (evt.type === "translated" || evt.type === "complete") {
               genOutput.value = evt;
-              generated.value = true; generating.value = false;
+              generated.value = true; generating.value = false; translating.value = false;
               if (genOutput.value?.body_html) editedBodyHtml.value = genOutput.value.body_html;
               if (genOutput.value?.body_text) editedBodyText.value = genOutput.value.body_text;
+              if (genOutput.value?.body_html_foreign) editedForeignHtml.value = genOutput.value.body_html_foreign;
+              if (genOutput.value?.body_text_foreign) editedForeignText.value = genOutput.value.body_text_foreign;
             } else if (evt.type === "error") {
               genError.value = evt.message; generating.value = false;
             }
@@ -351,6 +430,51 @@ async function handleGenerate() {
     generating.value = false;
   } catch (err: any) { genError.value = err.message || "生成失败"; generating.value = false; }
   finally { genLoading.value = false; loadData(); }
+}
+
+async function handleRetranslate() {
+  if (!currentId.value) return;
+  translating.value = true; genError.value = null; streamText.value = "";
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+    const token = localStorage.getItem("access_token");
+    const resp = await fetch(`${baseUrl}/email-templates/${currentId.value}/translate`, {
+      method: "POST", headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error((e as any).detail || "翻译失败"); }
+    const reader = resp.body?.getReader(); if (!reader) return;
+    const decoder = new TextDecoder(); let buf = "";
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n"); buf = lines.pop() || "";
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const evt = JSON.parse(line.slice(6));
+            if (evt.type === "translate_text") {
+              streamText.value += evt.content || "";
+            } else if (evt.type === "translated") {
+              if (genOutput.value) {
+                genOutput.value.body_html_foreign = evt.body_html_foreign;
+                genOutput.value.body_text_foreign = evt.body_text_foreign;
+                if (evt.subjects_foreign) {
+                  genOutput.value.subjects_foreign = evt.subjects_foreign;
+                }
+              }
+              editedForeignHtml.value = evt.body_html_foreign;
+              editedForeignText.value = evt.body_text_foreign;
+              translating.value = false;
+              ElMessage.success("翻译完成");
+            } else if (evt.type === "error") {
+              genError.value = evt.message; translating.value = false;
+            }
+          } catch { /* */ }
+        }
+      }
+    }
+    translating.value = false;
+  } catch (err: any) { genError.value = err.message || "翻译失败"; translating.value = false; }
 }
 
 const deleting = ref(false);
@@ -384,7 +508,9 @@ onMounted(loadData);
   margin-top: 8px;
   .section-title { font-size: 13px; font-weight: 600; color: #475569; display: block; margin-bottom: 8px; }
   .subject-select { margin-bottom: 12px; }
-  .subject-radio { padding: 4px 0; :deep(.el-radio__label) { font-size: 13px; } }
+  .subject-radio { padding: 4px 0; :deep(.el-radio__label) { font-size: 13px; line-height: 1.6; } }
+  .subject-line { word-break: break-word; }
+  .subject-cn-ref { color: #94a3b8; font-size: 12px; padding-left: 0; }
   .score-row { display: flex; gap: 8px; margin-bottom: 4px; }
 
   .email-preview {
