@@ -13,6 +13,7 @@ export interface CustomerListItem {
   status: string;
   website: string | null;
   contacts_count: number;
+  contacts_with_email_count: number;
   icp_id: string | null;
   icp_name: string | null;
   created_at: string;

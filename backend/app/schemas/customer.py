@@ -96,6 +96,7 @@ class CustomerListItem(BaseModel):
     status: str
     website: Optional[str] = None
     contacts_count: int = 0
+    contacts_with_email_count: int = 0  # 有邮箱地址的联系人数（用于邮件发送筛选）
     icp_id: Optional[uuid.UUID] = None
     icp_name: Optional[str] = None
     created_at: datetime

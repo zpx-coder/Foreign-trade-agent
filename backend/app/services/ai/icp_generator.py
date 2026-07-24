@@ -96,30 +96,36 @@ class IcpGenerator:
         else:
             company_size = "未指定"
 
-        # ── 产品信息（v1.3：优先使用 product_ids 内联数据，其次结构化价格，最后回退旧字段）──
+        # ── 产品信息（v1.5：支持 manual_products 手动填写 + _products_inline 关联产品 + 旧字段回退）──
+        product_source = input_data.get("product_source", "linked")
         products_inline = input_data.get("_products_inline")  # 前端快照传入
-        if products_inline and isinstance(products_inline, list):
-            lines = []
-            for p in products_inline:
-                name = p.get("name", "未命名")
-                desc = p.get("description", "")
-                price = p.get("price_usd")
-                moq = p.get("moq")
-                category = p.get("category", "")
-                hs_code = p.get("hs_code", "")
-                parts = [f"- 产品：{name}"]
-                if category:
-                    parts.append(f"  品类：{category}")
-                if desc:
-                    parts.append(f"  描述：{desc}")
-                if price is not None:
-                    parts.append(f"  单价：${price} USD")
-                if moq is not None:
-                    parts.append(f"  起订量：{moq}")
-                if hs_code:
-                    parts.append(f"  HS编码：{hs_code}")
-                lines.append("\n".join(parts))
-            products_section = "\n\n".join(lines)
+        manual_products = input_data.get("manual_products")  # v1.5 手动填写
+
+        def _format_product(p: dict) -> str:
+            """格式化单个产品为 prompt 文本"""
+            name = p.get("name", "未命名")
+            desc = p.get("description", "")
+            price = p.get("price_usd")
+            moq = p.get("moq")
+            category = p.get("category", "")
+            hs_code = p.get("hs_code", "")
+            parts = [f"- 产品：{name}"]
+            if category:
+                parts.append(f"  品类：{category}")
+            if desc:
+                parts.append(f"  描述：{desc}")
+            if price is not None:
+                parts.append(f"  单价：${price} USD")
+            if moq is not None:
+                parts.append(f"  起订量：{moq}")
+            if hs_code:
+                parts.append(f"  HS编码：{hs_code}")
+            return "\n".join(parts)
+
+        if product_source == "manual" and manual_products and isinstance(manual_products, list):
+            products_section = "\n\n".join(_format_product(p) for p in manual_products)
+        elif products_inline and isinstance(products_inline, list):
+            products_section = "\n\n".join(_format_product(p) for p in products_inline)
         else:
             # 结构化价格
             price_min = input_data.get("product_price_min")

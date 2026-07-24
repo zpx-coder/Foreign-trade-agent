@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.icp import Icp
 from app.models.product import Product
 from app.models.enterprise import EnterpriseProfile
+from app.models.contact import Contact
 from app.models.customer import Customer
 from app.models.send_log import SendLog
 from app.models.email_campaign import EmailCampaign
@@ -63,9 +64,17 @@ async def get_dashboard_stats(
         Customer.tenant_id == tenant_id
     )
     total_customers = (await db.execute(customer_base)).scalar() or 0
-    customers_reached = (
-        await db.execute(customer_base.where(Customer.status != "new"))
-    ).scalar() or 0
+    # 触达 = 至少有一个联系人成功发送过邮件（非 pending/failed）
+    customers_reached = (await db.execute(
+        select(func.count(func.distinct(Contact.customer_id)))
+        .select_from(SendLog)
+        .join(Contact, SendLog.contact_id == Contact.id)
+        .join(EmailCampaign, SendLog.campaign_id == EmailCampaign.id)
+        .where(
+            EmailCampaign.tenant_id == tenant_id,
+            SendLog.status.in_(["sent", "delivered", "opened", "replied"]),
+        )
+    )).scalar() or 0
     reach_rate = (customers_reached / total_customers) if total_customers > 0 else 0.0
 
     # 客户状态分布
@@ -160,7 +169,7 @@ async def get_dashboard_stats(
             EmailCampaign, SendLog.campaign_id == EmailCampaign.id
         ).where(
             EmailCampaign.tenant_id == tenant_id,
-            SendLog.status.in_(["sent", "delivered"]),
+            SendLog.status.in_(["sent", "delivered", "opened", "replied"]),
         )
     )).scalar() or 0
 
@@ -175,34 +184,37 @@ async def get_dashboard_stats(
 
     open_rate = round(total_emails_opened / total_emails_sent, 4) if total_emails_sent > 0 else 0.0
 
-    # 近 6 个月月度统计
-    monthly_email_stats: List[dict] = []
+    # 近 30 天按日统计
+    daily_email_stats: List[dict] = []
     try:
-        from sqlalchemy import extract, text
+        from sqlalchemy import case, text
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
-        monthly_q = (
+        daily_q = (
             select(
-                func.date_trunc("month", SendLog.created_at).label("month"),
+                func.date_trunc("day", SendLog.created_at).label("day"),
                 func.count(SendLog.id).label("sent"),
                 func.count(func.nullif(SendLog.opened_at, None)).label("opened"),
+                func.sum(
+                    case((SendLog.status == "replied", 1), else_=0)
+                ).label("replied"),
             )
             .select_from(SendLog)
             .join(EmailCampaign, SendLog.campaign_id == EmailCampaign.id)
             .where(
                 EmailCampaign.tenant_id == tenant_id,
-                SendLog.created_at >= func.now() - text("interval '6 months'"),
+                SendLog.created_at >= func.now() - text("interval '30 days'"),
             )
             .group_by(text("1"))
-            .order_by(text("1 DESC"))
+            .order_by(text("1 ASC"))
         )
-        monthly_rows = (await db.execute(monthly_q)).all()
-        monthly_email_stats = [
-            {"month": str(r[0])[:7], "sent": r[1], "opened": r[2]}
-            for r in monthly_rows
+        daily_rows = (await db.execute(daily_q)).all()
+        daily_email_stats = [
+            {"day": str(r[0])[:10], "sent": r[1], "opened": r[2], "replied": r[3] or 0}
+            for r in daily_rows
         ]
     except Exception:
-        monthly_email_stats = []
+        daily_email_stats = []
 
     # 已回复数
     total_emails_replied = (await db.execute(
@@ -238,5 +250,5 @@ async def get_dashboard_stats(
         "total_emails_replied": total_emails_replied,
         "open_rate": open_rate,
         "reply_rate": total_emails_replied / total_emails_sent if total_emails_sent > 0 else 0.0,
-        "monthly_email_stats": monthly_email_stats,
+        "daily_email_stats": daily_email_stats,
     }

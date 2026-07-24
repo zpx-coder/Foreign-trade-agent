@@ -20,6 +20,31 @@ USER_AGENT = (
 # DDG HTML 版端点——无需 JS，返回简单 HTML，反爬力度低
 _DDG_HTML_URL = "https://html.duckduckgo.com/html/"
 
+# 非公司网站域名黑名单：命中任一关键词则丢弃该结果
+_NON_COMPANY_DOMAIN_KEYWORDS = [
+    # 内容平台 / 博客
+    "zhihu.com", "medium.com", "blog.", "blogs.",
+    # 百科 / 知识库
+    "wikipedia.org", "baike.baidu.com", "wiki.",
+    # 新闻 / 媒体
+    "news.", "forbes.com", "36kr.com", "sohu.com",
+    "ifeng.com", "163.com", "qq.com", "sina.com.cn",
+    "bbc.com", "cnn.com", "reuters.com", "bloomberg.com",
+    "finance.yahoo.com", "marketwatch.com",
+    # 问答 / 论坛
+    "quora.com", "reddit.com", "stackexchange.com",
+    "stackoverflow.com", "zhidao.baidu.com",
+    # 视频 / 社交
+    "youtube.com", "youtu.be", "bilibili.com",
+    "facebook.com", "twitter.com", "instagram.com",
+    "tiktok.com", "weibo.com",
+    # 招聘
+    "linkedin.com/jobs", "indeed.com", "glassdoor.com",
+    "zhaopin.com", "51job.com",
+    # 其他
+    "amazon.com", "ebay.com", "alibaba.com/products",
+]
+
 
 class DuckDuckGoSearchChannel(SearchChannel):
     """DuckDuckGo HTML 搜索 — httpx + BeautifulSoup 解析搜索结果"""
@@ -69,6 +94,9 @@ class DuckDuckGoSearchChannel(SearchChannel):
                 for result_div in soup.select(".result"):
                     parsed = self._parse_result(result_div, "duckduckgo_search")
                     if parsed and parsed.company_name:
+                        # 过滤非公司域名（内容平台、新闻、百科等）
+                        if self._is_non_company_url(parsed.website):
+                            continue
                         results.append(parsed)
 
                 logger.info(
@@ -126,3 +154,14 @@ class DuckDuckGoSearchChannel(SearchChannel):
             source_url=source_url,
             source_channel=channel,
         )
+
+    @staticmethod
+    def _is_non_company_url(url: Optional[str]) -> bool:
+        """检查 URL 是否命中非公司网站黑名单"""
+        if not url:
+            return False
+        url_lower = url.lower()
+        for keyword in _NON_COMPANY_DOMAIN_KEYWORDS:
+            if keyword in url_lower:
+                return True
+        return False

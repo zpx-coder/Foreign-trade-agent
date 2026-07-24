@@ -45,13 +45,14 @@ from app.services.ai_service import AIServiceError, get_ai_service
 from app.services.ai.customer_extractor import CustomerExtractor
 from app.services.enrichment.customer_enricher import CustomerEnricher
 from app.services.enrichment.contact_scraper import ContactScraper
-from app.services.enrichment.email_inferrer import EmailInferrer
+from app.services.enrichment.hunter_service import HunterService
 from app.services.search.base import SearchResult
 from app.services.search.google_channel import GoogleSearchChannel
 from app.services.search.linkedin_channel import LinkedInSearchChannel
 from app.services.search.linkedin_people_channel import LinkedInPeopleSearchChannel
 from app.services.search.duckduckgo_channel import DuckDuckGoSearchChannel
 from app.services.search.ai_search_channel import AISearchChannel
+from app.services.search.serper_channel import SerperSearchChannel
 from app.services.search.contact_search import ContactSearchService
 from app.services.search.aggregator import SearchAggregator
 
@@ -149,6 +150,10 @@ def _row_to_listitem(customer: Customer) -> CustomerListItem:
     icp_name = None
     if hasattr(customer, "icp") and customer.icp:
         icp_name = customer.icp.name
+    contacts = customer.contacts or []
+    contacts_with_email = sum(
+        1 for c in contacts if c.email and c.email.strip()
+    )
     return CustomerListItem(
         id=customer.id,
         name=customer.name,
@@ -157,7 +162,8 @@ def _row_to_listitem(customer: Customer) -> CustomerListItem:
         source=customer.source,
         status=customer.status,
         website=customer.website,
-        contacts_count=len(customer.contacts) if customer.contacts else 0,
+        contacts_count=len(contacts),
+        contacts_with_email_count=contacts_with_email,
         icp_id=customer.icp_id,
         icp_name=icp_name,
         created_at=customer.created_at,
@@ -195,7 +201,7 @@ def _row_to_response(customer: Customer) -> CustomerResponse:
 @router.get("", response_model=CustomerListResponse)
 async def list_customers(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=2000),
     status: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
     search: Optional[str] = Query(None, description="搜索公司名/行业"),
@@ -652,6 +658,7 @@ async def export_customers(
 _CHANNELS_MAP = {
     "ai": AISearchChannel,
     "google": GoogleSearchChannel,
+    "serper": SerperSearchChannel,
     "linkedin": LinkedInSearchChannel,
     "linkedin_people": LinkedInPeopleSearchChannel,
     "duckduckgo": DuckDuckGoSearchChannel,
@@ -671,32 +678,39 @@ async def _execute_search(
 ):
     """执行 6 步客户搜索，通过 on_progress(event_dict) 报告进度。
 
-    返回结果字典：{"saved_count", "enriched_count", "contact_search_count", "inferred_count", "total_found"}
+    返回结果字典：{"saved_count", "enriched_count", "contact_search_count", "total_found"}
     """
     query = " ".join(filter(None, [
         icp_data.get("target_industry", ""),
         icp_data.get("product_category", ""),
     ])) or icp_name
 
-    # Step 1: 各渠道搜索
+    # Step 1: 各渠道搜索（并行）
     await on_progress({"type": "section", "section": "searching"})
     all_results: List[SearchResult] = []
 
-    for channel_name in channels:
-        channel_cls = _CHANNELS_MAP.get(channel_name)
-        if not channel_cls:
-            continue
-
-        await on_progress({"type": "progress", "channel": channel_name, "message": f"正在 {channel_name} 搜索..."})
-
+    async def _search_channel(channel_name: str, channel_cls):
+        """单个渠道搜索任务，返回 (channel_name, results, error_str)"""
         try:
+            await on_progress({"type": "progress", "channel": channel_name, "message": f"正在 {channel_name} 搜索..."})
             channel = channel_cls()
             results = await channel.search(query, region, max_results=_MAX_SEARCH_RESULTS)
-            all_results.extend(results)
             await on_progress({"type": "progress", "channel": channel_name, "found": len(results), "message": f"{channel_name} 找到 {len(results)} 条"})
+            return channel_name, results, None
         except Exception as e:
             logger.warning(f"Channel {channel_name} failed: {e}")
             await on_progress({"type": "progress", "channel": channel_name, "error": str(e), "message": f"{channel_name} 搜索失败: {e}"})
+            return channel_name, [], str(e)
+
+    channel_tasks = [
+        _search_channel(name, cls)
+        for name in channels
+        if (cls := _CHANNELS_MAP.get(name))
+    ]
+    if channel_tasks:
+        channel_results = await asyncio.gather(*channel_tasks)
+        for _, results, _ in channel_results:
+            all_results.extend(results)
 
     # Step 2: 聚合去重
     await on_progress({"type": "section", "section": "deduping"})
@@ -704,97 +718,25 @@ async def _execute_search(
     deduped = aggregator.aggregate(all_results)
     await on_progress({"type": "progress", "message": f"去重后 {len(deduped)} 条，开始 AI 结构化..."})
 
-    # Step 3: AI 结构化并写入 DB
+    # Step 3: AI 结构化并写入 DB（并行，最多 5 个并发提取）
     await on_progress({"type": "section", "section": "saving"})
     ai_service = get_ai_service()
     saved_count = 0
     saved_customers: list = []  # [(customer_id, website), ...]
 
-    for result in deduped[:_MAX_SEARCH_RESULTS]:
-        try:
-            if result.skip_extraction:
-                # AI 渠道已返回结构化数据，直接写入 DB
-                async with AsyncSessionLocal() as sess:
-                    website_to_check = result.website
-                    if website_to_check:
-                        existing = await sess.execute(
-                            select(func.count(Customer.id)).where(
-                                Customer.tenant_id == tenant_id,
-                                Customer.website == website_to_check,
-                            )
-                        )
-                        if existing.scalar():
-                            await on_progress({"type": "progress", "message": "已存在，跳过: " + result.company_name})
-                            continue
+    _extract_semaphore = asyncio.Semaphore(5)
+    _saved_lock = asyncio.Lock()
 
-                    customer = Customer(
-                        tenant_id=tenant_id, created_by=user_id,
-                        name=result.company_name, industry=result.industry,
-                        website=result.website, country=result.country,
-                        city=result.city, company_size=result.company_size,
-                        description=result.description,
-                        source=(result.source_channel or "ai_search")[:48],
-                        source_url=result.source_url, icp_id=icp_id,
-                        status="new",
-                        source_data={
-                            "company_name": result.company_name,
-                            "industry": result.industry,
-                            "country": result.country,
-                            "city": result.city,
-                            "company_size": result.company_size,
-                            "description": result.description,
-                            "website": result.website,
-                            "source": "ai_search",
-                        },
-                        ai_summary=result.description,
-                    )
-                    sess.add(customer)
-                    await sess.flush()
+    async def _extract_and_save(result: SearchResult) -> tuple:
+        """单个结果的提取+保存任务。返回 (status, customer_id, website) 或 (status, None, None)"""
+        nonlocal saved_count, saved_customers
 
-                    for c_data in result.contacts or []:
-                        if c_data.get("name"):
-                            sess.add(Contact(
-                                customer_id=customer.id, tenant_id=tenant_id,
-                                name=c_data.get("name", ""), title=c_data.get("title"),
-                                email=c_data.get("email"), phone=c_data.get("phone"),
-                                linkedin_url=c_data.get("linkedin_url"),
-                                contact_type="ai_suggested",
-                                confidence=c_data.get("confidence", "inferred"),
-                            ))
-
-                    await sess.commit()
-                    saved_count += 1
-                    saved_customers.append((customer.id, result.website))
-                    await on_progress({"type": "progress", "message": "已保存: " + result.company_name})
-
-            else:
-                # 网页抓取渠道：抓取网页 + LLM 提取
-                page_content = result.description or ""
-                if result.website and _is_safe_url(result.website):
-                    try:
-                        async with httpx.AsyncClient(timeout=_MAX_PAGE_FETCH_TIMEOUT, headers={
-                            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-                        }) as client:
-                            page_resp = await client.get(
-                                result.website if "://" in (result.website or "") else f"https://{result.website}"
-                            )
-                            if page_resp.status_code == 200:
-                                soup = BeautifulSoup(page_resp.text, "lxml")
-                                for tag in soup(["script", "style", "nav", "footer", "header"]):
-                                    tag.decompose()
-                                page_content = soup.get_text(separator="\n", strip=True)[:10000]
-                    except Exception:
-                        pass
-
-                extractor = CustomerExtractor(ai_service)
-                async for event in extractor.extract(page_content, result.website or ""):
-                    if event["type"] == "text":
-                        await on_progress({"type": "text", "content": event["content"]})
-
-                output = extractor.get_output()
-                if output and not output.get("parse_error"):
+        async with _extract_semaphore:
+            try:
+                if result.skip_extraction:
+                    # AI 渠道已返回结构化数据，直接写入 DB
                     async with AsyncSessionLocal() as sess:
-                        website_to_check = output.get("website") or result.website
+                        website_to_check = result.website
                         if website_to_check:
                             existing = await sess.execute(
                                 select(func.count(Customer.id)).where(
@@ -803,225 +745,313 @@ async def _execute_search(
                                 )
                             )
                             if existing.scalar():
-                                await on_progress({"type": "progress", "message": "已存在，跳过: " + (output.get("company_name") or result.company_name)})
-                                continue
+                                await on_progress({"type": "progress", "message": "已存在，跳过: " + result.company_name})
+                                return ("skipped", None, None)
 
                         customer = Customer(
                             tenant_id=tenant_id, created_by=user_id,
-                            name=output.get("company_name") or result.company_name,
-                            industry=output.get("industry") or result.industry,
-                            website=output.get("website") or result.website,
-                            country=output.get("country") or result.country,
-                            city=output.get("city") or result.city,
-                            company_size=output.get("company_size"),
-                            description=output.get("description") or result.description,
+                            name=result.company_name, industry=result.industry,
+                            website=result.website, country=result.country,
+                            city=result.city, company_size=result.company_size,
+                            description=result.description,
                             source=(result.source_channel or "ai_search")[:48],
                             source_url=result.source_url, icp_id=icp_id,
-                            status="new", source_data=output,
-                            ai_summary=output.get("description"),
+                            status="new",
+                            source_data={
+                                "company_name": result.company_name,
+                                "industry": result.industry,
+                                "country": result.country,
+                                "city": result.city,
+                                "company_size": result.company_size,
+                                "description": result.description,
+                                "website": result.website,
+                                "source": "ai_search",
+                            },
+                            ai_summary=result.description,
                         )
                         sess.add(customer)
                         await sess.flush()
 
-                        for c_data in output.get("contacts") or []:
+                        for c_data in result.contacts or []:
                             if c_data.get("name"):
                                 sess.add(Contact(
                                     customer_id=customer.id, tenant_id=tenant_id,
                                     name=c_data.get("name", ""), title=c_data.get("title"),
                                     email=c_data.get("email"), phone=c_data.get("phone"),
                                     linkedin_url=c_data.get("linkedin_url"),
-                                    contact_type="scraped",
-                                    confidence="high" if c_data.get("email") else "medium",
+                                    contact_type="ai_suggested",
+                                    confidence=c_data.get("confidence", "inferred"),
                                 ))
 
                         await sess.commit()
-                        saved_count += 1
-                        saved_customers.append((customer.id, output.get("website") or result.website))
-                        await on_progress({"type": "progress", "message": "已保存: " + (output.get("company_name") or result.company_name)})
+                        async with _saved_lock:
+                            saved_count += 1
+                            saved_customers.append((customer.id, result.website))
+                        await on_progress({"type": "progress", "message": "已保存: " + result.company_name})
+                        return ("saved", customer.id, result.website)
 
-        except AIServiceError as e:
-            logger.warning(f"AI extraction failed for {result.company_name}: {e}")
-            continue
+                else:
+                    # 网页抓取渠道：抓取网页 + LLM 提取
+                    page_content = None
+                    page_fetched = False
+                    if result.website and _is_safe_url(result.website):
+                        try:
+                            async with httpx.AsyncClient(timeout=_MAX_PAGE_FETCH_TIMEOUT, headers={
+                                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                            }) as client:
+                                page_resp = await client.get(
+                                    result.website if "://" in (result.website or "") else f"https://{result.website}"
+                                )
+                                if page_resp.status_code == 200:
+                                    soup = BeautifulSoup(page_resp.text, "lxml")
+                                    for tag in soup(["script", "style", "nav", "footer", "header"]):
+                                        tag.decompose()
+                                    page_content = soup.get_text(separator="\n", strip=True)[:10000]
+                                    page_fetched = True
+                        except Exception:
+                            pass
 
-    # Step 4: 定向联系人搜索
+                    if not page_fetched or not page_content:
+                        await on_progress({"type": "progress", "message": "网页抓取失败，跳过: " + (result.company_name or result.website or "未知")})
+                        return ("skipped", None, None)
+
+                    extractor = CustomerExtractor(ai_service)
+                    # 并行模式下不逐 token 输出流式文本（会交错混乱），仅静默提取
+                    async for _ in extractor.extract(page_content, result.website or ""):
+                        pass
+
+                    output = extractor.get_output()
+                    if output is None:
+                        await on_progress({"type": "progress", "message": "非公司页面，跳过: " + (result.company_name or result.website or "未知")})
+                        return ("skipped", None, None)
+
+                    if not output.get("parse_error"):
+                        company_name = output.get("company_name")
+                        if not company_name:
+                            await on_progress({"type": "progress", "message": "未提取到公司名，跳过: " + (result.website or "未知")})
+                            return ("skipped", None, None)
+
+                        async with AsyncSessionLocal() as sess:
+                            website_to_check = output.get("website") or result.website
+                            if website_to_check:
+                                existing = await sess.execute(
+                                    select(func.count(Customer.id)).where(
+                                        Customer.tenant_id == tenant_id,
+                                        Customer.website == website_to_check,
+                                    )
+                                )
+                                if existing.scalar():
+                                    await on_progress({"type": "progress", "message": "已存在，跳过: " + company_name})
+                                    return ("skipped", None, None)
+
+                            customer = Customer(
+                                tenant_id=tenant_id, created_by=user_id,
+                                name=company_name,
+                                industry=output.get("industry") or result.industry,
+                                website=output.get("website") or result.website,
+                                country=output.get("country") or result.country,
+                                city=output.get("city") or result.city,
+                                company_size=output.get("company_size"),
+                                description=output.get("description") or result.description,
+                                source=(result.source_channel or "ai_search")[:48],
+                                source_url=result.source_url, icp_id=icp_id,
+                                status="new", source_data=output,
+                                ai_summary=output.get("description"),
+                            )
+                            sess.add(customer)
+                            await sess.flush()
+
+                            for c_data in output.get("contacts") or []:
+                                if c_data.get("name"):
+                                    sess.add(Contact(
+                                        customer_id=customer.id, tenant_id=tenant_id,
+                                        name=c_data.get("name", ""), title=c_data.get("title"),
+                                        email=c_data.get("email"), phone=c_data.get("phone"),
+                                        linkedin_url=c_data.get("linkedin_url"),
+                                        contact_type="scraped",
+                                        confidence="high" if c_data.get("email") else "medium",
+                                    ))
+
+                            await sess.commit()
+                            async with _saved_lock:
+                                saved_count += 1
+                                saved_customers.append((customer.id, output.get("website") or result.website))
+                            await on_progress({"type": "progress", "message": "已保存: " + company_name})
+                            return ("saved", customer.id, output.get("website") or result.website)
+
+                    return ("skipped", None, None)
+
+            except AIServiceError as e:
+                logger.warning(f"AI extraction failed for {result.company_name}: {e}")
+                return ("skipped", None, None)
+            except Exception as e:
+                logger.error(f"Unexpected error processing {result.company_name}: {e}")
+                return ("skipped", None, None)
+
+    await on_progress({"type": "progress", "message": f"并行提取 {len(deduped[:_MAX_SEARCH_RESULTS])} 条结果（最多 5 并发）..."})
+    extract_tasks = [_extract_and_save(r) for r in deduped[:_MAX_SEARCH_RESULTS]]
+    await asyncio.gather(*extract_tasks, return_exceptions=True)
+
+    # Step 4: 定向联系人搜索（并行，最多 5 并发）
     await on_progress({"type": "section", "section": "contact_search"})
     contact_search_count = 0
-    if saved_customers:
-        await on_progress({"type": "progress", "message": f"正在对 {len(saved_customers)} 家公司进行定向联系人搜索..."})
-        contact_searcher = ContactSearchService(timeout=15.0)
-        for cid, website in saved_customers:
-            try:
-                async with AsyncSessionLocal() as sess:
-                    cust_result = await sess.execute(
-                        select(Customer.name, Customer.website).where(Customer.id == cid)
+    _contact_search_lock = asyncio.Lock()
+
+    async def _contact_search_one(cid: str, website: str):
+        """单家公司定向联系人搜索任务"""
+        nonlocal contact_search_count
+        try:
+            async with AsyncSessionLocal() as sess:
+                cust_result = await sess.execute(
+                    select(Customer.name, Customer.website).where(Customer.id == cid)
+                )
+                cust_row = cust_result.first()
+                if not cust_row:
+                    return
+                company_name = cust_row[0]
+                domain = cust_row[1] or website
+
+                searcher = ContactSearchService(timeout=15.0)
+                found_contacts = await searcher.search_company_contacts(
+                    company_name=company_name, domain=domain, region=region,
+                )
+                if found_contacts:
+                    existing_result = await sess.execute(
+                        select(Contact.name).where(Contact.customer_id == cid)
                     )
-                    cust_row = cust_result.first()
-                    if not cust_row:
-                        continue
-                    company_name = cust_row[0]
-                    domain = cust_row[1] or website
+                    existing_names = {r[0].lower().strip() for r in existing_result.all() if r[0]}
 
-                    found_contacts = await contact_searcher.search_company_contacts(
-                        company_name=company_name, domain=domain, region=region,
-                    )
-                    if found_contacts:
-                        existing_result = await sess.execute(
-                            select(Contact.name).where(Contact.customer_id == cid)
-                        )
-                        existing_names = {r[0].lower().strip() for r in existing_result.all() if r[0]}
+                    added = 0
+                    for c_data in found_contacts:
+                        c_name = (c_data.get("name") or "").strip()
+                        if c_name and c_name.lower() in existing_names:
+                            continue
+                        if not c_data.get("email") and not c_name:
+                            continue
 
-                        added = 0
-                        for c_data in found_contacts:
-                            c_name = (c_data.get("name") or "").strip()
-                            if c_name and c_name.lower() in existing_names:
-                                continue
-                            if not c_data.get("email") and not c_name:
-                                continue
+                        sess.add(Contact(
+                            customer_id=cid, tenant_id=tenant_id,
+                            name=c_name or (c_data.get("email", "").split("@")[0] if c_data.get("email") else "Unknown"),
+                            title=c_data.get("title"), email=c_data.get("email"),
+                            phone=c_data.get("phone"), linkedin_url=c_data.get("linkedin_url"),
+                            contact_type="ai_suggested", confidence="medium",
+                        ))
+                        if c_name:
+                            existing_names.add(c_name.lower())
+                        added += 1
 
-                            sess.add(Contact(
-                                customer_id=cid, tenant_id=tenant_id,
-                                name=c_name or (c_data.get("email", "").split("@")[0] if c_data.get("email") else "Unknown"),
-                                title=c_data.get("title"), email=c_data.get("email"),
-                                phone=c_data.get("phone"), linkedin_url=c_data.get("linkedin_url"),
-                                contact_type="ai_suggested", confidence="medium",
-                            ))
-                            if c_name:
-                                existing_names.add(c_name.lower())
-                            added += 1
-
-                        if added > 0:
-                            await sess.commit()
+                    if added > 0:
+                        await sess.commit()
+                        async with _contact_search_lock:
                             contact_search_count += 1
-                            await on_progress({"type": "progress", "message": f"从定向搜索为 {company_name} 找到 {added} 个联系人"})
-            except Exception as e:
-                logger.warning(f"Contact search failed for customer {cid}: {e}")
+                        await on_progress({"type": "progress", "message": f"从定向搜索为 {company_name} 找到 {added} 个联系人"})
+        except Exception as e:
+            logger.warning(f"Contact search failed for customer {cid}: {e}")
+
+    if saved_customers:
+        await on_progress({"type": "progress", "message": f"正在对 {len(saved_customers)} 家公司进行定向联系人搜索（并行）..."})
+        _cs_sem = asyncio.Semaphore(5)
+        async def _cs_limited(cid, website):
+            async with _cs_sem:
+                await _contact_search_one(cid, website)
+        await asyncio.gather(*[_cs_limited(cid, ws) for cid, ws in saved_customers], return_exceptions=True)
 
     await on_progress({"type": "progress", "message": f"定向搜索完成，为 {contact_search_count} 家公司找到联系人"})
 
-    # Step 5: 批量爬虫补全联系人
+    # Step 5: 批量爬虫补全联系人（并行，最多 3 并发——爬虫较重）
     await on_progress({"type": "section", "section": "enriching"})
     enriched_count = 0
-    if saved_customers:
-        await on_progress({"type": "progress", "message": f"正在从 {len(saved_customers)} 个公司网站抓取联系人信息..."})
-        scraper = ContactScraper(timeout=30.0)
-        for cid, website in saved_customers:
-            if not website:
-                continue
-            try:
-                contacts = await scraper.scrape(website)
-                if contacts:
-                    valid_contacts = [
-                        c for c in contacts
-                        if c.get("email") or (c.get("name") and c.get("title"))
-                    ]
-                    if valid_contacts:
-                        async with AsyncSessionLocal() as sess:
-                            existing_result = await sess.execute(
-                                select(Contact.name).where(Contact.customer_id == cid)
-                            )
-                            existing_names = {r[0].lower().strip() for r in existing_result.all() if r[0]}
+    _enrich_lock = asyncio.Lock()
 
-                            added = 0
-                            for c_data in valid_contacts:
-                                c_name = (c_data.get("name") or "").strip()
-                                if c_name and c_name.lower() in existing_names:
-                                    continue
-                                if not c_data.get("email") and not c_name:
-                                    continue
+    async def _scrape_one(cid: str, website: str):
+        """单个网站联系人抓取任务：网站抓取 + Hunter.io（如已配置）"""
+        nonlocal enriched_count
+        if not website:
+            return
 
-                                sess.add(Contact(
-                                    customer_id=cid, tenant_id=tenant_id,
-                                    name=c_name or c_data.get("email", "").split("@")[0],
-                                    title=c_data.get("title"), email=c_data.get("email"),
-                                    phone=c_data.get("phone"), linkedin_url=c_data.get("linkedin_url"),
-                                    contact_type="scraped",
-                                    confidence="high" if c_data.get("email") else "medium",
-                                ))
-                                if c_name:
-                                    existing_names.add(c_name.lower())
-                                added += 1
+        all_scraped_contacts: list = []
 
-                            if added > 0:
-                                await sess.commit()
-                                enriched_count += 1
-                                await on_progress({"type": "progress", "message": f"从 {website} 找到 {added} 个联系人"})
-            except Exception as e:
-                logger.warning(f"Contact scraping failed for {website}: {e}")
+        # 1. 网站抓取
+        try:
+            scraper = ContactScraper(timeout=30.0)
+            contacts = await scraper.scrape(website)
+            if contacts:
+                all_scraped_contacts.extend(contacts)
+        except Exception as e:
+            logger.warning(f"Contact scraping failed for {website}: {e}")
 
-    # Step 6: 邮箱模式推断
-    await on_progress({"type": "section", "section": "email_infer"})
-    inferred_count = 0
-    if saved_customers:
-        await on_progress({"type": "progress", "message": "正在为未匹配邮箱的联系人推断邮箱地址..."})
-        inferrer = EmailInferrer()
-        for cid, website in saved_customers:
-            try:
+        # 2. Hunter.io 域名搜索（如果配置了 API Key）
+        try:
+            hunter = HunterService()
+            if hunter.is_available:
+                domain = website.replace("https://", "").replace("http://", "").rstrip("/").split("/")[0]
+                hunter_contacts = await hunter.domain_search(domain)
+                if hunter_contacts:
+                    # 按 name+email 去重（与已有结果合并）
+                    seen_keys = {
+                        (c.get("name", "").lower(), (c.get("email") or "").lower())
+                        for c in all_scraped_contacts
+                    }
+                    for hc in hunter_contacts:
+                        key = ((hc.get("name") or "").lower(), (hc.get("email") or "").lower())
+                        if key[1] and key not in seen_keys:  # 只添加有邮箱的 Hunter 结果
+                            seen_keys.add(key)
+                            all_scraped_contacts.append(hc)
+                    await on_progress({"type": "progress", "message": f"Hunter 为 {domain} 找到 {len(hunter_contacts)} 个邮箱"})
+        except Exception as e:
+            logger.warning(f"Hunter search failed for {website}: {e}")
+
+        # 3. 保存到数据库
+        if all_scraped_contacts:
+            valid_contacts = [
+                c for c in all_scraped_contacts
+                if c.get("email") or (c.get("name") and c.get("title"))
+            ]
+            if valid_contacts:
                 async with AsyncSessionLocal() as sess:
-                    contacts_result = await sess.execute(
-                        select(Contact).where(Contact.customer_id == cid)
+                    existing_result = await sess.execute(
+                        select(Contact.name).where(Contact.customer_id == cid)
                     )
-                    customer_contacts = contacts_result.scalars().all()
+                    existing_names = {r[0].lower().strip() for r in existing_result.all() if r[0]}
 
-                    names_without_email = []
-                    existing_emails = []
-                    customer_domain = None
-                    for ct in customer_contacts:
-                        if ct.email:
-                            existing_emails.append(ct.email)
-                        if ct.name and not ct.email:
-                            names_without_email.append(ct.name)
-                        if ct.email and "@" in ct.email and not customer_domain:
-                            customer_domain = ct.email.split("@")[1]
+                    added = 0
+                    for c_data in valid_contacts:
+                        c_name = (c_data.get("name") or "").strip()
+                        if c_name and c_name.lower() in existing_names:
+                            continue
+                        if not c_data.get("email") and not c_name:
+                            continue
 
-                    if not customer_domain and website:
-                        parsed = urlparse(website if "://" in website else f"https://{website}")
-                        customer_domain = parsed.netloc.replace("www.", "") if parsed.netloc else None
+                        sess.add(Contact(
+                            customer_id=cid, tenant_id=tenant_id,
+                            name=c_name or c_data.get("email", "").split("@")[0],
+                            title=c_data.get("title"), email=c_data.get("email"),
+                            phone=c_data.get("phone"), linkedin_url=c_data.get("linkedin_url"),
+                            contact_type="scraped",
+                            confidence="high" if c_data.get("email") else "medium",
+                        ))
+                        if c_name:
+                            existing_names.add(c_name.lower())
+                        added += 1
 
-                    if not customer_domain:
-                        continue
+                    if added > 0:
+                        await sess.commit()
+                        async with _enrich_lock:
+                            enriched_count += 1
+                        await on_progress({"type": "progress", "message": f"从 {website} 找到 {added} 个联系人"})
 
-                    if names_without_email:
-                        inferred = inferrer.infer_emails(
-                            names=names_without_email,
-                            domain=customer_domain,
-                            known_emails_from_page=existing_emails,
-                        )
-                        if inferred:
-                            confident_inferred = [i for i in inferred if i.get("confidence") == "medium"]
-                            if not confident_inferred:
-                                confident_inferred = inferred[:2]
-
-                            for ct in customer_contacts:
-                                if ct.email or not ct.name:
-                                    continue
-                                matched = None
-                                for inf in confident_inferred:
-                                    inf_email = inf.get("email", "")
-                                    name_parts = ct.name.lower().split()
-                                    if len(name_parts) >= 2:
-                                        first, last = name_parts[0], name_parts[-1]
-                                        local_part = inf_email.split("@")[0]
-                                        if first in local_part or last in local_part or first[0] in local_part:
-                                            matched = inf
-                                            break
-                                if matched:
-                                    ct.email = matched["email"]
-                                    ct.contact_type = "inferred"
-                                    ct.confidence = "low"
-                                    inferred_count += 1
-
-                            if confident_inferred:
-                                await sess.commit()
-            except Exception as e:
-                logger.warning(f"Email inference failed for customer {cid}: {e}")
-
-    await on_progress({"type": "progress", "message": f"邮箱推断完成，为 {inferred_count} 个联系人推测了邮箱"})
+    if saved_customers:
+        await on_progress({"type": "progress", "message": f"正在从 {len(saved_customers)} 个公司网站抓取联系人信息（并行）..."})
+        _scrape_sem = asyncio.Semaphore(3)
+        async def _scrape_limited(cid, website):
+            async with _scrape_sem:
+                await _scrape_one(cid, website)
+        await asyncio.gather(*[_scrape_limited(cid, ws) for cid, ws in saved_customers], return_exceptions=True)
 
     result = {
         "saved_count": saved_count,
         "enriched_count": enriched_count,
         "contact_search_count": contact_search_count,
-        "inferred_count": inferred_count,
         "total_found": len(deduped),
     }
     await on_progress({"type": "complete", **result})
@@ -1146,7 +1176,6 @@ async def search_customers_background(
                     "saved_count": event.get("saved_count", 0),
                     "enriched_count": event.get("enriched_count", 0),
                     "contact_search_count": event.get("contact_search_count", 0),
-                    "inferred_count": event.get("inferred_count", 0),
                     "total_found": event.get("total_found", 0),
                 },
             )
@@ -1422,7 +1451,6 @@ async def ai_search_contacts(
         linkedin_found = 0
         contact_search_found = 0
         scraped_found = 0
-        inferred_count = 0
 
         try:
             # Step 1: LinkedIn 人物搜索
@@ -1549,59 +1577,8 @@ async def ai_search_contacts(
                     logger.warning(f"Contact scraping failed: {e}")
                     yield f"data: {json.dumps({'type': 'progress', 'message': f'网站抓取失败: {e}'}, ensure_ascii=False)}\n\n"
 
-            # Step 4: 邮箱推断（为无邮箱的联系人推断地址）
-            yield f"data: {json.dumps({'type': 'section', 'section': 'email_infer'}, ensure_ascii=False)}\n\n"
-
-            if domain:
-                yield f"data: {json.dumps({'type': 'progress', 'message': f'正在为未匹配邮箱的联系人推断邮箱...'}, ensure_ascii=False)}\n\n"
-                try:
-                    async with AsyncSessionLocal() as sess:
-                        all_contacts_result = await sess.execute(
-                            select(Contact).where(
-                                Contact.customer_id == _customer_id,
-                                Contact.email.is_(None),
-                            )
-                        )
-                        contacts_without_email = all_contacts_result.scalars().all()
-
-                        if contacts_without_email:
-                            names_without_email = [c.name for c in contacts_without_email if c.name]
-                            known_emails = list(existing_emails)
-                            inferrer = EmailInferrer()
-                            inferred = inferrer.infer_emails(
-                                names=names_without_email,
-                                domain=domain,
-                                known_emails_from_page=known_emails,
-                            )
-
-                            for ct in contacts_without_email:
-                                if ct.email or not ct.name:
-                                    continue
-                                name_parts = ct.name.lower().split()
-                                if len(name_parts) < 2:
-                                    continue
-                                first = name_parts[0]
-                                last = name_parts[-1]
-
-                                for inf in inferred:
-                                    if inf.get("confidence") != "medium":
-                                        continue
-                                    local_part = inf["email"].split("@")[0]
-                                    if first in local_part or last in local_part or first[0] in local_part:
-                                        ct.email = inf["email"]
-                                        ct.contact_type = "inferred"
-                                        ct.confidence = "low"
-                                        inferred_count += 1
-                                        existing_emails.add(inf["email"].lower())
-                                        break
-
-                            await sess.commit()
-                    yield f"data: {json.dumps({'type': 'progress', 'message': f'邮箱推断完成，为 {inferred_count} 个联系人推测了邮箱'}, ensure_ascii=False)}\n\n"
-                except Exception as e:
-                    logger.warning(f"Email inference failed: {e}")
-
-            total = linkedin_found + contact_search_found + scraped_found + inferred_count
-            yield f"data: {json.dumps({'type': 'complete', 'linkedin_found': linkedin_found, 'contact_search_found': contact_search_found, 'scraped_found': scraped_found, 'inferred_count': inferred_count, 'total': total}, ensure_ascii=False)}\n\n"
+            total = linkedin_found + contact_search_found + scraped_found
+            yield f"data: {json.dumps({'type': 'complete', 'linkedin_found': linkedin_found, 'contact_search_found': contact_search_found, 'scraped_found': scraped_found, 'total': total}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
             logger.error(f"AI search contacts fatal error: {e}")

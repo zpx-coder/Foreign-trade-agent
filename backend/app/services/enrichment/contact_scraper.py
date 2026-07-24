@@ -34,10 +34,26 @@ _CONTACT_PATHS = [
     "company",         # /company
     "imprint",         # /imprint (德国公司常有)
     "impressum",       # /impressum
+    # v1.5 新增路径
+    "careers",         # 招聘页常有 HR 邮箱
+    "support",         # 支持页
+    "press",           # 新闻/媒体页
+    "locations",       # 分支地址页
+    "offices",         # 办公地点
+    "staff",           # 员工页
+    "who-we-are",      # 关于我们（变体）
+    "get-in-touch",    # 联系方式（变体）
+    "reach-us",        # 联系方式（变体）
+    "en/contact",      # 多语言 /en/contact
+    "en/contact-us",   # 多语言 /en/contact-us
+    "en/about",        # 多语言 /en/about
+    "en/about-us",     # 多语言 /en/about-us
+    "cn/contact",      # 中文站
+    "zh/contact",      # 中文站
 ]
 
 _PAGE_TIMEOUT = 12.0
-_MAX_PAGES = 8  # 最多抓取 8 个页面
+_MAX_PAGES = 15  # v1.5：从 8 提升到 15，覆盖更多页面
 _MAX_CONTENT_LENGTH = 8000
 
 # 邮箱正则（常见 B2B 模式）
@@ -94,10 +110,13 @@ class ContactScraper:
         base_url = website if "://" in website else f"https://{website}"
         parsed = urlparse(base_url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
+        domain = parsed.netloc.replace("www.", "")
 
         all_emails: set = set()
         all_phones: set = set()
         all_text = ""
+        # 内链发现：从首页提取可能的 contact/team 页面
+        discovered_paths: set = set()
 
         async with httpx.AsyncClient(
             timeout=_PAGE_TIMEOUT,
@@ -105,10 +124,16 @@ class ContactScraper:
             follow_redirects=True,
         ) as client:
             pages_fetched = 0
+            # 先从固定路径开始，再追加发现的路径
+            crawl_paths = list(_CONTACT_PATHS)
 
-            for path in _CONTACT_PATHS:
+            for path in crawl_paths:
                 if pages_fetched >= _MAX_PAGES:
                     break
+                # 跳过已发现但重复的路径
+                if path in discovered_paths:
+                    continue
+                discovered_paths.add(path)
 
                 page_url = urljoin(origin, path) if path else base_url
 
@@ -118,6 +143,36 @@ class ContactScraper:
                         continue
 
                     soup = BeautifulSoup(resp.text, "lxml")
+
+                    # ── 内链发现（仅在首页和 about 页执行）──
+                    if path in ("", "about", "about-us", "en/about", "en/about-us"):
+                        for link in soup.select("a[href]"):
+                            href = (link.get("href") or "").strip()
+                            if not href or href.startswith("#") or href.startswith("javascript:"):
+                                continue
+                            # 只关心同域名下的内部链接
+                            resolved = urljoin(origin, href)
+                            try:
+                                link_parsed = urlparse(resolved)
+                            except Exception:
+                                continue
+                            if link_parsed.netloc.replace("www.", "") != domain:
+                                continue
+                            link_path = link_parsed.path.strip("/").lower()
+                            if not link_path:
+                                continue
+                            # 匹配可能包含联系人的路径关键词
+                            contact_keywords = (
+                                "contact", "about", "team", "people", "staff",
+                                "management", "leadership", "who-we-are", "our-",
+                                "get-in-touch", "reach-us", "office", "location",
+                                "support", "press", "career", "imprint", "impressum",
+                            )
+                            if any(kw in link_path for kw in contact_keywords):
+                                # 检查是否为新路径
+                                if link_path not in discovered_paths:
+                                    discovered_paths.add(link_path)
+                                    crawl_paths.append(link_path)
 
                     # 提取邮箱（从页面文本）
                     text = resp.text
@@ -130,7 +185,7 @@ class ContactScraper:
                     }
                     all_emails.update(valid_emails)
 
-                    # 新增：提取 mailto: 链接中的邮箱（更可靠）
+                    # 提取 mailto: 链接中的邮箱（更可靠）
                     for mailto_link in soup.select("a[href^='mailto:']"):
                         href = mailto_link.get("href", "")
                         if href:
@@ -138,7 +193,7 @@ class ContactScraper:
                             if "@" in mailto_email and len(mailto_email.split("@")[0]) >= 2:
                                 all_emails.add(mailto_email.lower())
 
-                    # 新增：提取 Schema.org Person JSON-LD 结构化数据
+                    # 提取 Schema.org Person JSON-LD 结构化数据
                     for script_tag in soup.select('script[type="application/ld+json"]'):
                         try:
                             ld_data = _json.loads(script_tag.string or "{}")
@@ -169,7 +224,7 @@ class ContactScraper:
                         except (_json.JSONDecodeError, TypeError, AttributeError):
                             pass
 
-                    # 新增：提取 <meta> 标签中的邮箱和联系人信息
+                    # 提取 <meta> 标签中的邮箱和联系人信息
                     for meta in soup.select('meta[name="author"], meta[name="email"], meta[property="og:email"], meta[name="contact"]'):
                         content = meta.get("content", "")
                         if "@" in content:
@@ -196,6 +251,44 @@ class ContactScraper:
                     logger.debug(f"Failed to fetch {page_url}: {e}")
                 except Exception as e:
                     logger.warning(f"Error scraping {page_url}: {e}")
+
+        # ── DDG site:domain "@" 搜索：发现网站上任何含邮箱的页面 ──
+        if not all_emails:
+            try:
+                from app.services.search.duckduckgo_channel import DuckDuckGoSearchChannel
+                ddg = DuckDuckGoSearchChannel(timeout=12.0)
+                site_results = await ddg.search(
+                    query=f'site:{domain} "@"',
+                    region="",
+                    max_results=15,
+                )
+                # 抓取 DDG 发现的页面
+                for sr in site_results:
+                    if not sr.website or pages_fetched >= _MAX_PAGES + 5:
+                        break
+                    try:
+                        # 跳过已知路径
+                        sr_path = urlparse(sr.website if "://" in sr.website else f"https://{sr.website}").path.strip("/")
+                        if sr_path in discovered_paths:
+                            continue
+                        discovered_paths.add(sr_path)
+
+                        resp = await client.get(sr.website, timeout=_PAGE_TIMEOUT)
+                        if resp.status_code == 200:
+                            emails = set(_EMAIL_RE.findall(resp.text))
+                            valid_emails = {
+                                e for e in emails
+                                if not e.endswith((".png", ".jpg", ".gif", ".svg", ".css", ".js"))
+                                and len(e.split("@")[0]) >= 2
+                            }
+                            all_emails.update(valid_emails)
+                            pages_fetched += 1
+                            if valid_emails:
+                                logger.info(f"DDG discovered emails on {sr.website}: {len(valid_emails)}")
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.debug(f"DDG site search failed: {e}")
 
         if not all_emails and not all_phones:
             logger.info(f"No emails/phones found on {website}")

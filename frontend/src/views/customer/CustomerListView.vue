@@ -83,8 +83,8 @@
               <span class="task-icp-name">{{ task.icp_name }}</span>
               <span class="task-result-text">
                 保存 <strong>{{ task.result?.saved_count || 0 }}</strong> 个客户
-                <template v-if="task.result?.contact_search_count || task.result?.enriched_count || task.result?.inferred_count">
-                  ，找到 <strong>{{ (task.result?.contact_search_count || 0) + (task.result?.enriched_count || 0) + (task.result?.inferred_count || 0) }}</strong> 个联系人
+                <template v-if="task.result?.contact_search_count || task.result?.enriched_count">
+                  ，找到 <strong>{{ (task.result?.contact_search_count || 0) + (task.result?.enriched_count || 0) }}</strong> 个联系人
                 </template>
               </span>
               <span class="task-time">{{ formatTimeAgo(task.updated_at) }}</span>
@@ -281,11 +281,14 @@
             </el-form-item>
           </el-col>
           <el-col :span="9">
-            <el-form-item label="来源" prop="source">
-              <el-select v-model="form.source" style="width: 100%">
-                <el-option label="手动添加" value="manual" />
-                <el-option label="手动导入" value="manual_import" />
-                <el-option label="AI 提取" value="ai_extraction" />
+            <el-form-item label="客户画像" prop="icp_id">
+              <el-select v-model="form.icp_id" placeholder="选择画像（可选）" clearable style="width: 100%">
+                <el-option
+                  v-for="icp in icpFilterOptions"
+                  :key="icp.id"
+                  :label="icp.name"
+                  :value="icp.id"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -343,7 +346,6 @@
                 成功保存 <strong>{{ savedCount }}</strong> 个客户
                 <span v-if="contactSearchCount > 0">，定向搜索找到 <strong>{{ contactSearchCount }}</strong> 个联系人</span>
                 <span v-if="enrichedCount > 0">，网站抓取 <strong>{{ enrichedCount }}</strong> 个联系人</span>
-                <span v-if="inferredCount > 0">，推断 <strong>{{ inferredCount }}</strong> 个邮箱</span>
               </p>
               <p v-else>未找到可保存的客户数据</p>
               <el-button type="primary" @click="searchDialog.visible = false; loadData()">关闭并刷新列表</el-button>
@@ -399,7 +401,7 @@
                 <span class="stat-label">保存客户</span>
               </div>
               <div class="task-detail-stat">
-                <span class="stat-num">{{ (taskDetailDialog.task.result?.contact_search_count || 0) + (taskDetailDialog.task.result?.enriched_count || 0) + (taskDetailDialog.task.result?.inferred_count || 0) }}</span>
+                <span class="stat-num">{{ (taskDetailDialog.task.result?.contact_search_count || 0) + (taskDetailDialog.task.result?.enriched_count || 0) }}</span>
                 <span class="stat-label">发现联系人</span>
               </div>
             </div>
@@ -415,11 +417,6 @@
                 <span class="breakdown-dot" style="background:#22c55e"></span>
                 <span>网站抓取</span>
                 <span class="breakdown-count">{{ taskDetailDialog.task.result?.enriched_count || 0 }}</span>
-              </div>
-              <div class="breakdown-item">
-                <span class="breakdown-dot" style="background:#f59e0b"></span>
-                <span>邮箱推断</span>
-                <span class="breakdown-count">{{ taskDetailDialog.task.result?.inferred_count || 0 }}</span>
               </div>
             </div>
           </template>
@@ -660,7 +657,7 @@ async function handleExport() {
 const formRef = ref<FormInstance>();
 const EMPTY_FORM = {
   name: "", industry: "", website: "", country: "", city: "",
-  company_size: "", description: "", source: "manual", status: "new", notes: "",
+  company_size: "", description: "", source: "manual", status: "new", notes: "", icp_id: "",
 };
 const form = reactive({ ...EMPTY_FORM });
 const formDialog = reactive({ visible: false, isEdit: false, editId: null as string | null, saving: false });
@@ -681,10 +678,12 @@ async function openCreateDialog(row?: CustomerListItem) {
       form.source = detail.source;
       form.status = detail.status;
       form.notes = detail.notes || "";
+      form.icp_id = detail.icp_id || "";
     } catch {
       // fallback to list item data
       form.name = row.name; form.industry = row.industry || "";
       form.country = row.country || ""; form.source = row.source; form.status = row.status;
+      form.icp_id = row.icp_id || "";
     }
   } else {
     formDialog.isEdit = false; formDialog.editId = null; resetForm();
@@ -735,7 +734,6 @@ const searchSectionList = [
   { key: "saving", label: "AI 结构化提取 & 保存" },
   { key: "contact_search", label: "定向联系人搜索" },
   { key: "enriching", label: "抓取网站联系人" },
-  { key: "email_infer", label: "邮箱模式推断" },
 ];
 const searchThinkingTexts = [
   "正在多渠道搜索目标客户...",
@@ -743,7 +741,6 @@ const searchThinkingTexts = [
   "正在 AI 结构化提取...",
   "正在定向搜索联系人...",
   "正在抓取网站联系人信息...",
-  "正在推断邮箱地址...",
 ];
 
 const searching = ref(false);
@@ -754,7 +751,6 @@ const searchCurrentSection = ref<string | null>(null);
 const savedCount = ref(0);
 const enrichedCount = ref(0);
 const contactSearchCount = ref(0);
-const inferredCount = ref(0);
 
 // ── 后台任务 ──
 interface SearchTask {
@@ -770,7 +766,6 @@ interface SearchTask {
     saved_count: number;
     enriched_count: number;
     contact_search_count: number;
-    inferred_count: number;
     total_found: number;
   };
   error: string | null;
@@ -795,7 +790,6 @@ const sectionLabels: Record<string, string> = {
   saving: "AI 结构化提取 & 保存",
   contact_search: "定向联系人搜索",
   enriching: "抓取网站联系人",
-  email_infer: "邮箱模式推断",
 };
 function sectionLabel(section: string | null): string {
   if (!section) return "";
@@ -803,7 +797,7 @@ function sectionLabel(section: string | null): string {
 }
 
 function progressPercent(task: SearchTask): number {
-  const order = ["searching", "deduping", "saving", "contact_search", "enriching", "email_infer"];
+  const order = ["searching", "deduping", "saving", "contact_search", "enriching"];
   const idx = order.indexOf(task.current_section || "");
   return idx >= 0 ? Math.round(((idx + 0.5) / order.length) * 100) : 10;
 }
@@ -822,7 +816,7 @@ async function openSearchDialog() {
   searchDialog.visible = true;
   searchDialog.icpId = ""; searchDialog.channels = ["duckduckgo"]; searchDialog.region = "";
   searchDone.value = false; searchError.value = null; searchCurrentSection.value = null;
-  savedCount.value = 0; enrichedCount.value = 0; contactSearchCount.value = 0; inferredCount.value = 0;
+  savedCount.value = 0; enrichedCount.value = 0; contactSearchCount.value = 0;
   try {
     const { data } = await api.get("/icps", { params: { page: 1, page_size: 50 } });
     icpOptions.value = data.items || [];
@@ -898,7 +892,7 @@ function dismissTask(taskId: string) {
 function startSearch() {
   if (!searchDialog.icpId || !searchDialog.channels.length) return;
   searching.value = true; searchDone.value = false; searchError.value = null; searchCurrentSection.value = null;
-  savedCount.value = 0; enrichedCount.value = 0; contactSearchCount.value = 0; inferredCount.value = 0;
+  savedCount.value = 0; enrichedCount.value = 0; contactSearchCount.value = 0;
   const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
   const token = localStorage.getItem("access_token");
   const controller = new AbortController();
@@ -935,7 +929,6 @@ function startSearch() {
               savedCount.value = event.saved_count || 0;
               enrichedCount.value = event.enriched_count || 0;
               contactSearchCount.value = event.contact_search_count || 0;
-              inferredCount.value = event.inferred_count || 0;
               searching.value = false; searchDone.value = true;
             } else if (event.type === "error") {
               searchError.value = event.message;

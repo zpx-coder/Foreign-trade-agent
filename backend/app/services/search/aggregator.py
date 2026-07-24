@@ -45,6 +45,13 @@ class SearchAggregator:
 
     def _merge(self, a: SearchResult, b: SearchResult) -> SearchResult:
         """合并两个同域名的结果，保留非空字段"""
+        # 合并 source_channel，按 ", " 拆分后去重再合并
+        raw_sources = []
+        for src in (a.source_channel, b.source_channel):
+            if src:
+                raw_sources.extend(s.strip() for s in src.split(", ") if s.strip())
+        merged_source = ", ".join(dict.fromkeys(raw_sources))
+
         merged = SearchResult(
             company_name=a.company_name or b.company_name,
             website=a.website or b.website,
@@ -54,9 +61,7 @@ class SearchAggregator:
             description=a.description or b.description,
             contacts=a.contacts if a.contacts else b.contacts,
             source_url=a.source_url or b.source_url,
-            source_channel=", ".join(
-                dict.fromkeys(filter(None, [a.source_channel, b.source_channel]))
-            ),
+            source_channel=merged_source,
         )
         return merged
 

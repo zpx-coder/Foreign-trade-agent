@@ -138,7 +138,6 @@
                     <span v-if="aiStats.linkedin_found > 0">LinkedIn {{ aiStats.linkedin_found }}</span>
                     <span v-if="aiStats.contact_search_found > 0">定向搜索 {{ aiStats.contact_search_found }}</span>
                     <span v-if="aiStats.scraped_found > 0">网站抓取 {{ aiStats.scraped_found }}</span>
-                    <span v-if="aiStats.inferred_count > 0">邮箱推断 {{ aiStats.inferred_count }}</span>
                   </p>
                   <p v-else>未发现新的联系人信息</p>
                   <el-button type="primary" size="small" @click="aiSearchResult = false; loadData()">
@@ -346,20 +345,17 @@ const aiStats = ref({
   linkedin_found: 0,
   contact_search_found: 0,
   scraped_found: 0,
-  inferred_count: 0,
   total: 0,
 });
 const aiSearchSectionList = [
   { key: "linkedin_people", label: "LinkedIn 人物搜索" },
   { key: "contact_search", label: "定向联系人搜索" },
   { key: "scraping", label: "网站抓取" },
-  { key: "email_infer", label: "邮箱模式推断" },
 ];
 const aiSearchThinkingTexts = [
   "正在 LinkedIn 搜索相关人物...",
   "正在定向搜索联系人...",
   "正在抓取网站信息...",
-  "正在推断邮箱地址...",
 ];
 
 async function handleEnrich() {
@@ -426,7 +422,7 @@ async function handleAISearchContacts() {
   aiSearchError.value = null;
   aiSearchResult.value = true;
   aiCurrentSection.value = null;
-  aiStats.value = { linkedin_found: 0, contact_search_found: 0, scraped_found: 0, inferred_count: 0, total: 0 };
+  aiStats.value = { linkedin_found: 0, contact_search_found: 0, scraped_found: 0, total: 0 };
 
   const token = localStorage.getItem("access_token");
   const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -462,7 +458,6 @@ async function handleAISearchContacts() {
                 linkedin_found: event.linkedin_found || 0,
                 contact_search_found: event.contact_search_found || 0,
                 scraped_found: event.scraped_found || 0,
-                inferred_count: event.inferred_count || 0,
                 total: event.total || 0,
               };
               aiSearchDone.value = true;
