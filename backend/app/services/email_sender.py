@@ -59,6 +59,11 @@ def render_template(
     return result
 
 
+def build_message_id(smtp_host: str) -> str:
+    """生成 RFC 5322 Message-ID，用于后续 IMAP 回复匹配"""
+    return f"<{uuid.uuid4().hex}@{smtp_host.replace('smtp.', '')}>"
+
+
 def _build_message(
     smtp_config: dict,
     to_email: str,
@@ -119,14 +124,23 @@ async def send_email(
     tracking_id: Optional[str] = None,
     tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """异步发送单封邮件（在 executor 中运行同步 SMTP）"""
+    """异步发送单封邮件（在 executor 中运行同步 SMTP）
+
+    Returns:
+        {"success": bool, "message_id": str, "error": Optional[str]}
+    """
     loop = asyncio.get_event_loop()
+
+    smtp_host = smtp_config.get("host", "localhost")
+    message_id = build_message_id(smtp_host)
 
     def _send():
         msg = _build_message(
             smtp_config, to_email, subject, html_body, text_body,
             tracking_id, tenant_id,
         )
+        # 覆盖 Message-ID 为预先生成的值
+        msg["Message-ID"] = message_id
         host = smtp_config["host"]
         port = smtp_config.get("port", 465)
 
@@ -143,12 +157,12 @@ async def send_email(
             server.login(smtp_config["username"], smtp_password)
             server.send_message(msg)
             server.quit()
-            return {"success": True}
+            return {"success": True, "message_id": message_id}
         except smtplib.SMTPAuthenticationError as e:
-            return {"success": False, "error": f"SMTP 认证失败: {e.smtp_error}"}
+            return {"success": False, "error": f"SMTP 认证失败: {e.smtp_error}", "message_id": message_id}
         except smtplib.SMTPException as e:
-            return {"success": False, "error": f"SMTP 错误: {e}"}
+            return {"success": False, "error": f"SMTP 错误: {e}", "message_id": message_id}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "message_id": message_id}
 
     return await loop.run_in_executor(None, _send)

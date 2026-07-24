@@ -219,3 +219,22 @@ async def unsubscribe_confirm(
             body='<h2>退订失败</h2><p>未找到对应的发送记录，请联系发件人手动处理。</p>'
         )
     )
+
+
+# ── IMAP 回复检查（手动触发） ──
+
+@router.post("/check-replies")
+async def manual_check_replies():
+    """手动触发一次全租户 IMAP 回复检查"""
+    try:
+        from app.services.email.reply_tracker import check_replies_for_all_tenants
+        results = await check_replies_for_all_tenants()
+        return {
+            "status": "ok",
+            "tenants_checked": len(results),
+            "new_replies": sum(results.values()),
+            "details": results,
+        }
+    except Exception as e:
+        logger.exception("Manual reply check failed")
+        raise HTTPException(status_code=500, detail=str(e))

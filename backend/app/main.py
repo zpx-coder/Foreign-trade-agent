@@ -1,6 +1,9 @@
 """FastAPI 应用入口"""
 
+import asyncio
+import logging
 import os
+from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,13 +11,46 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
+# 后台 IMAP 轮询任务引用（用于优雅关闭）
+_imap_poll_task: Optional[asyncio.Task] = None
+
+
+async def _imap_poll_loop():
+    """后台 IMAP 回复轮询循环"""
+    interval = max(settings.IMAP_POLL_INTERVAL_MINUTES, 1) * 60
+    logger.info(
+        f"IMAP reply poll started (interval: {settings.IMAP_POLL_INTERVAL_MINUTES} min)"
+    )
+    # 首次启动后等待 30 秒再开始，确保服务完全就绪
+    await asyncio.sleep(30)
+    while True:
+        try:
+            from app.services.email.reply_tracker import check_replies_for_all_tenants
+            await check_replies_for_all_tenants()
+        except Exception:
+            logger.exception("IMAP poll loop error")
+        await asyncio.sleep(interval)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时
+    global _imap_poll_task
+
+    # 启动时：启动 IMAP 回复轮询
+    _imap_poll_task = asyncio.create_task(_imap_poll_loop())
+
     yield
-    # 关闭时 — 清理资源（后续添加 Redis / ES 连接关闭）
+
+    # 关闭时：取消后台任务
+    if _imap_poll_task:
+        _imap_poll_task.cancel()
+        try:
+            await _imap_poll_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(

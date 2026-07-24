@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     EMAIL_SEND_INTERVAL_SECONDS: int = 45    # 默认 45 秒/封
     EMAIL_DAILY_QUOTA: int = 450             # 默认日配额（留余量）
 
+    # ── IMAP 回复追踪 ──
+    IMAP_POLL_INTERVAL_MINUTES: int = 5     # IMAP 轮询间隔（分钟）
+
+    # ── Hunter.io 邮箱发现（25次/月免费）https://hunter.io ──
+    HUNTER_API_KEY: Optional[str] = None
+
+    # ── Serper.dev Google 搜索（2500次/月免费）https://serper.dev ──
+    SERPER_API_KEY: Optional[str] = None
+
     # ── 文件上传 ──
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE_MB: int = 5

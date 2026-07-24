@@ -48,6 +48,7 @@ class EmailCampaign(Base):
     sent_count: Mapped[int] = mapped_column(Integer, default=0)
     delivered_count: Mapped[int] = mapped_column(Integer, default=0)
     opened_count: Mapped[int] = mapped_column(Integer, default=0)
+    replied_count: Mapped[int] = mapped_column(Integer, default=0)
     bounced_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # ── SMTP 配置 ──

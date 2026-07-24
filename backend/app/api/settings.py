@@ -80,3 +80,69 @@ async def update_smtp_config(
         from_name=smtp_dict["from_name"],
         from_email=smtp_dict["from_email"],
     )
+
+
+# ── IMAP 配置（用于回复追踪） ──
+
+from app.schemas.members import ImapConfigRequest, ImapConfigResponse
+
+
+@router.get("/imap", response_model=ImapConfigResponse)
+async def get_imap_config(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取租户 IMAP 配置（用于邮件回复追踪）"""
+    result = await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id)
+    )
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="租户不存在")
+
+    imap = (tenant.settings or {}).get("imap_config") or {}
+    return ImapConfigResponse(
+        host=imap.get("host", "imap.gmail.com"),
+        port=imap.get("port", 993),
+        username=imap.get("username", ""),
+        password="" if imap.get("password") else "",
+    )
+
+
+@router.put("/imap", response_model=ImapConfigResponse)
+async def update_imap_config(
+    data: ImapConfigRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """保存租户 IMAP 配置"""
+    result = await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id)
+    )
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="租户不存在")
+
+    imap_dict = data.model_dump()
+    # 密码非空且非脱敏值 → 加密存储
+    if imap_dict.get("password") and imap_dict["password"] != "********":
+        imap_dict["password"] = encrypt_smtp_password(imap_dict["password"])
+    else:
+        old_imap = (tenant.settings or {}).get("imap_config") or {}
+        if old_imap.get("password"):
+            imap_dict["password"] = old_imap["password"]
+        else:
+            imap_dict["password"] = ""
+
+    current_settings = tenant.settings or {}
+    current_settings["imap_config"] = imap_dict
+    tenant.settings = current_settings
+    flag_modified(tenant, "settings")
+    await db.commit()
+
+    return ImapConfigResponse(
+        host=imap_dict["host"],
+        port=imap_dict["port"],
+        username=imap_dict["username"],
+        password="" if imap_dict.get("password") else "",
+    )

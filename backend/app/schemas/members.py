@@ -57,3 +57,19 @@ class SmtpConfigResponse(BaseModel):
     password: str = ""  # 返回时脱敏，设为空或星号
     from_name: str
     from_email: str
+
+
+# ── IMAP 配置 ──
+
+class ImapConfigRequest(BaseModel):
+    host: str = Field(default="imap.gmail.com", max_length=255)
+    port: int = Field(default=993, ge=1, le=65535)
+    username: str = Field(min_length=1, max_length=255)
+    password: str = Field(default="", max_length=255)
+
+
+class ImapConfigResponse(BaseModel):
+    host: str
+    port: int
+    username: str
+    password: str = ""  # 返回时脱敏

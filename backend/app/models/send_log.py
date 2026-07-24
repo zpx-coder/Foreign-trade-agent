@@ -47,9 +47,15 @@ class SendLog(Base):
     tracking_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), unique=True, default=uuid.uuid4
     )
+    message_id: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )  # 发件时 Message-ID，用于 IMAP 回复匹配
     opened_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    replied_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )  # IMAP 检测到回复的时间
 
     # ── 错误 ──
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
