@@ -59,8 +59,22 @@
           <!-- 编辑模式 -->
           <el-form v-else :model="editForm" label-position="top" class="edit-form">
             <el-form-item label="目标行业">
-              <el-input v-model="editForm.target_industry" placeholder="如：消费电子" />
-            </el-form-item>
+                <el-select
+                  v-model="editForm.target_industry"
+                  filterable
+                  allow-create
+                  clearable
+                  placeholder="请选择或输入行业"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="item in B2B_INDUSTRIES"
+                    :key="item"
+                    :label="item"
+                    :value="item"
+                  />
+                </el-select>
+              </el-form-item>
             <el-form-item label="目标地区">
               <el-input v-model="editForm.target_region" placeholder="如：北美、西欧" />
             </el-form-item>
@@ -236,6 +250,7 @@ import PageHeader from "@/components/common/PageHeader.vue";
 import LoadingSkeleton from "@/components/common/LoadingSkeleton.vue";
 import StatusBadge from "@/components/common/StatusBadge.vue";
 import StreamingOutput from "@/components/ai/StreamingOutput.vue";
+import { B2B_INDUSTRIES } from "@/constants/industries";
 import { useSSE } from "@/composables/useSSE";
 import { useIcpStore } from "@/stores/icp";
 import type { IcpItem } from "@/stores/icp";

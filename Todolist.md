@@ -187,3 +187,7 @@
 - **修复卡在"发送中"的任务**：后台任务崩溃导致状态卡在 sending，手动修复已有僵尸任务。`list_campaigns` 新增自动检测：已发完但状态卡 sending 的自动标记为 completed。
 - **发送任务列表自动轮询进度**：[CampaignListView.vue](frontend/src/views/email/CampaignListView.vue) 检测到有 sending 状态任务时自动每 3 秒刷新列表，全部完成后停止轮询，页面离开时清理定时器。
 - **任务名称区分**：名称格式从 `发送任务 2026/7/24` 改为 `{模板名称} — 2026/7/24 16:30`，已批量更新全部历史任务名称。
+
+## 2026-07-27
+
+- **ICP 目标行业优化**：`target_industry` 从纯文本输入框改为可搜索下拉框（`el-select` + `filterable` + `allow-create`），提供 20 个外贸 B2B 常见行业快捷选项（消费电子、家居用品、服装纺织等），同时支持自由输入自定义行业。新建 [industries.ts](frontend/src/constants/industries.ts) 公共常量，[IcpCreate.vue](frontend/src/views/icp/IcpCreate.vue) 和 [IcpDetail.vue](frontend/src/views/icp/IcpDetail.vue) 同步更新。

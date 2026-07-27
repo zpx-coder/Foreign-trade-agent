@@ -28,7 +28,21 @@
           <el-row :gutter="24">
             <el-col :span="12">
               <el-form-item label="目标行业">
-                <el-input v-model="form.target_industry" placeholder="如：消费电子" />
+                <el-select
+                  v-model="form.target_industry"
+                  filterable
+                  allow-create
+                  clearable
+                  placeholder="请选择或输入行业"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="item in B2B_INDUSTRIES"
+                    :key="item"
+                    :label="item"
+                    :value="item"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="12">
@@ -253,6 +267,7 @@ import PageHeader from "@/components/common/PageHeader.vue";
 import StreamingOutput from "@/components/ai/StreamingOutput.vue";
 import ProductSelector from "./components/ProductSelector.vue";
 import { useSSE } from "@/composables/useSSE";
+import { B2B_INDUSTRIES } from "@/constants/industries";
 import { useIcpStore } from "@/stores/icp";
 import type { ProductInline } from "@/stores/icp";
 
