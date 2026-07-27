@@ -112,6 +112,7 @@ async def list_icps(
             target_industry=input_data.get("target_industry"),
             company_size=company_size,
             customer_budget=budget_display,
+            buyer_type=input_data.get("buyer_type"),
             created_at=icp.created_at,
             updated_at=icp.updated_at,
         ))

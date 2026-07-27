@@ -109,6 +109,7 @@ class IcpListItem(BaseModel):
     target_industry: Optional[str] = None
     company_size: Optional[List[str]] = None
     customer_budget: Optional[str] = None
+    buyer_type: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

@@ -317,6 +317,29 @@
             <el-option v-for="icp in icpOptions" :key="icp.id" :label="icp.name" :value="icp.id" />
           </el-select>
         </el-form-item>
+
+        <!-- 选中 ICP 摘要 -->
+        <div v-if="selectedIcpSummary" class="icp-summary-card">
+          <div class="icp-summary__header">
+            <el-icon><UserFilled /></el-icon>
+            <span>{{ selectedIcpSummary.name }}</span>
+          </div>
+          <div class="icp-summary__tags">
+            <el-tag v-if="selectedIcpSummary.target_industry" size="small" type="success" effect="plain">
+              {{ selectedIcpSummary.target_industry }}
+            </el-tag>
+            <el-tag v-if="selectedIcpSummary.target_region" size="small" type="warning" effect="plain">
+              {{ selectedIcpSummary.target_region }}
+            </el-tag>
+            <el-tag v-if="selectedIcpSummary.buyer_type" size="small" effect="plain">
+              {{ selectedIcpSummary.buyer_type }}
+            </el-tag>
+            <el-tag v-if="selectedIcpSummary.company_size_text" size="small" effect="plain">
+              {{ selectedIcpSummary.company_size_text }}
+            </el-tag>
+          </div>
+        </div>
+
         <el-form-item label="搜索渠道">
           <el-checkbox-group v-model="searchDialog.channels" :disabled="searching">
             <el-checkbox label="ai">AI 智能搜索</el-checkbox>
@@ -324,9 +347,6 @@
             <el-checkbox label="google">Google</el-checkbox>
             <el-checkbox label="linkedin">LinkedIn</el-checkbox>
           </el-checkbox-group>
-        </el-form-item>
-        <el-form-item label="目标区域（可选）">
-          <el-input v-model="searchDialog.region" placeholder="如：Germany, USA" :disabled="searching" />
         </el-form-item>
       </el-form>
       <div v-if="searching || searchDone" class="search-progress">
@@ -724,9 +744,27 @@ async function handleDelete() {
 
 // ── 搜索 ──
 const searchDialog = reactive({
-  visible: false, icpId: "", channels: ["ai"] as string[], region: "",
+  visible: false, icpId: "", channels: ["ai"] as string[],
 });
-const icpOptions = ref<{ id: string; name: string }[]>([]);
+interface IcpOption {
+  id: string;
+  name: string;
+  target_industry?: string | null;
+  target_region?: string | null;
+  company_size?: string[] | null;
+  buyer_type?: string;
+}
+const icpOptions = ref<IcpOption[]>([]);
+
+const selectedIcpSummary = computed(() => {
+  if (!searchDialog.icpId) return null;
+  const icp = icpOptions.value.find((i) => i.id === searchDialog.icpId);
+  if (!icp) return null;
+  return {
+    ...icp,
+    company_size_text: icp.company_size?.join("、") || "",
+  };
+});
 const searchSectionList = [
   { key: "searching", label: "多渠道搜索" },
   { key: "deduping", label: "聚合去重" },
@@ -813,13 +851,27 @@ function formatTimeAgo(iso: string): string {
 
 async function openSearchDialog() {
   searchDialog.visible = true;
-  searchDialog.icpId = ""; searchDialog.channels = ["duckduckgo"]; searchDialog.region = "";
+  searchDialog.icpId = ""; searchDialog.channels = ["duckduckgo"];
   searchDone.value = false; searchError.value = null; searchCurrentSection.value = null;
   savedCount.value = 0; enrichedCount.value = 0; contactSearchCount.value = 0;
   try {
     const { data } = await api.get("/icps", { params: { page: 1, page_size: 50 } });
-    icpOptions.value = data.items || [];
+    icpOptions.value = (data.items || []).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      target_industry: item.target_industry,
+      target_region: item.target_region,
+      company_size: item.company_size,
+      buyer_type: item.buyer_type,
+    }));
   } catch { icpOptions.value = []; }
+}
+
+/** 获取选中 ICP 的 target_region，用于搜索请求 */
+function getIcpRegion(): string | null {
+  if (!searchDialog.icpId) return null;
+  const icp = icpOptions.value.find((i) => i.id === searchDialog.icpId);
+  return icp?.target_region || null;
 }
 
 // ── 后台搜索 ──
@@ -838,7 +890,7 @@ async function startBackgroundSearch() {
     await api.post("/customers/search/background", {
       icp_id: searchDialog.icpId,
       channels: searchDialog.channels,
-      region: searchDialog.region || null,
+      region: getIcpRegion(),
     });
     searchDialog.visible = false;
     tasksExpanded.value = true;
@@ -901,7 +953,7 @@ function startSearch() {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       icp_id: searchDialog.icpId, channels: searchDialog.channels,
-      region: searchDialog.region || null,
+      region: getIcpRegion(),
     }),
     signal: controller.signal,
   }).then(async (response) => {
@@ -1168,6 +1220,31 @@ onUnmounted(() => { stopPolling(); });
   .batch-info { font-size: 13px; font-weight: 500; color: #1e40af; }
   .table-card { border-radius: 14px; border: 1px solid #e2e8f0; }
   .pagination-wrap { display: flex; justify-content: flex-end; margin-top: 16px; }
+  .icp-summary-card {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+
+    .icp-summary__header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 10px;
+      .el-icon { color: #3b82f6; }
+    }
+
+    .icp-summary__tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+  }
+
   .search-progress {
     margin-top: 16px; padding: 16px; background: #f8fafc;
     border-radius: 8px; border: 1px solid #e2e8f0;
