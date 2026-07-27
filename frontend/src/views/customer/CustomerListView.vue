@@ -323,7 +323,6 @@
             <el-checkbox label="duckduckgo">DuckDuckGo</el-checkbox>
             <el-checkbox label="google">Google</el-checkbox>
             <el-checkbox label="linkedin">LinkedIn</el-checkbox>
-            <el-checkbox label="linkedin_people">LinkedIn 人物搜索</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
         <el-form-item label="目标区域（可选）">

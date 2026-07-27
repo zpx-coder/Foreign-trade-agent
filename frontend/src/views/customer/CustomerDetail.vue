@@ -348,7 +348,7 @@ const aiStats = ref({
   total: 0,
 });
 const aiSearchSectionList = [
-  { key: "linkedin_people", label: "LinkedIn 人物搜索" },
+  { key: "linkedin_people", label: "LinkedIn 搜索" },
   { key: "contact_search", label: "定向联系人搜索" },
   { key: "scraping", label: "网站抓取" },
 ];

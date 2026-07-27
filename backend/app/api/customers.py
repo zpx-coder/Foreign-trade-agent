@@ -702,6 +702,10 @@ async def _execute_search(
             await on_progress({"type": "progress", "channel": channel_name, "error": str(e), "message": f"{channel_name} 搜索失败: {e}"})
             return channel_name, [], str(e)
 
+    # LinkedIn 渠道合二为一：搜公司的同时自动搜人物
+    if "linkedin" in channels and "linkedin_people" not in channels:
+        channels = channels + ["linkedin_people"]
+
     channel_tasks = [
         _search_channel(name, cls)
         for name in channels

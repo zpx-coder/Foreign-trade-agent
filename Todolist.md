@@ -191,3 +191,4 @@
 ## 2026-07-27
 
 - **ICP 目标行业优化**：`target_industry` 从纯文本输入框改为可搜索下拉框（`el-select` + `filterable` + `allow-create`），提供 20 个外贸 B2B 常见行业快捷选项（消费电子、家居用品、服装纺织等），同时支持自由输入自定义行业。新建 [industries.ts](frontend/src/constants/industries.ts) 公共常量，[IcpCreate.vue](frontend/src/views/icp/IcpCreate.vue) 和 [IcpDetail.vue](frontend/src/views/icp/IcpDetail.vue) 同步更新。
+- **LinkedIn 渠道合并**：前端搜索对话框移除"LinkedIn 人物搜索"独立复选框，后端 `_execute_search` 选中 `linkedin` 时自动连带执行 `linkedin_people`。用户只需勾选"LinkedIn"即可覆盖公司搜索+人物搜索。
