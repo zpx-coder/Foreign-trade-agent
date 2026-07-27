@@ -194,3 +194,4 @@
 - **LinkedIn 渠道合并**：前端搜索对话框移除"LinkedIn 人物搜索"独立复选框，后端 `_execute_search` 选中 `linkedin` 时自动连带执行 `linkedin_people`。用户只需勾选"LinkedIn"即可覆盖公司搜索+人物搜索。
 - **搜索弹窗 ICP 摘要 + 区域自动填充**：选择客户画像后展示画像关键信息标签（目标行业/目标地区/买家类型/公司规模）。移除"目标区域"手动输入字段，自动从 ICP 的 `target_region` 取值传入搜索请求。后端 `IcpListItem` Schema 新增 `buyer_type` 字段。
 - **修复搜索任务详情弹窗进度不实时更新**：根因是 `openTaskDetail` 将任务对象快照赋值给 `taskDetailDialog.task`，后续轮询更新 `searchTasks` 数组但弹窗引用未同步。改为存 `taskId` + `computed` 实时从 `searchTasks` 查找，确保弹窗内容随轮询自动刷新。
+- **新建任务选择客户增加筛选条件**：客户选择步骤新增"客户画像"下拉筛选和"添加时间"日期范围筛选，同时加载 ICP 列表供选项。每次进入客户选择步骤时自动重置筛选条件。

@@ -100,10 +100,24 @@
 
         <template v-else>
           <div class="cust-toolbar">
-            <el-input v-model="customerSearch" placeholder="搜索公司名/行业" clearable style="width:240px" />
-            <el-select v-model="customerFilter" placeholder="国家筛选" clearable style="width:160px" @change="() => {}">
+            <el-input v-model="customerSearch" placeholder="搜索公司名/行业" clearable style="width:200px" />
+            <el-select v-model="icpFilter" placeholder="客户画像" clearable style="width:160px">
+              <el-option v-for="icp in icpFilterOptions" :key="icp.id" :label="icp.name" :value="icp.id" />
+            </el-select>
+            <el-select v-model="customerFilter" placeholder="国家筛选" clearable style="width:130px" @change="() => {}">
               <el-option v-for="c in countryOptions" :key="c" :label="c" :value="c" />
             </el-select>
+            <el-date-picker
+              v-model="dateRange"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="添加时间起"
+              end-placeholder="添加时间止"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              style="width:240px"
+              clearable
+            />
             <span class="cust-count">
               共 {{ filteredCustomers.length }} 个可选客户（已选 {{ wizard.customerIds.length }} 个）
               <template v-if="customers.length > 0">
@@ -284,6 +298,9 @@ const customers = ref<CustomerListItem[]>([]);
 const customersLoaded = ref(false);
 const customerSearch = ref("");
 const customerFilter = ref("");
+const icpFilter = ref("");
+const dateRange = ref<[string, string] | null>(null);
+const icpFilterOptions = ref<{ id: string; name: string }[]>([]);
 const customerTable = ref();
 const smtpFormRef = ref<FormInstance>();
 const creating = ref(false);
@@ -330,8 +347,20 @@ const filteredCustomers = computed(() => {
     const q = customerSearch.value.toLowerCase();
     list = list.filter(c => c.name.toLowerCase().includes(q) || (c.industry || "").toLowerCase().includes(q));
   }
+  if (icpFilter.value) {
+    list = list.filter(c => c.icp_id === icpFilter.value);
+  }
   if (customerFilter.value) {
     list = list.filter(c => c.country === customerFilter.value);
+  }
+  if (dateRange.value) {
+    const [start, end] = dateRange.value;
+    const startDate = new Date(start);
+    const endDate = new Date(end + "T23:59:59");
+    list = list.filter(c => {
+      const d = new Date(c.created_at);
+      return d >= startDate && d <= endDate;
+    });
   }
   return list;
 });
@@ -360,10 +389,17 @@ async function openCreateWizard() {
 async function loadCustomers() {
   wizard.custLoading = true;
   customersLoaded.value = false;
+  icpFilter.value = "";
+  dateRange.value = null;
   try {
     await customerStore.fetchList({ page_size: 500 });
     customers.value = customerStore.list;
     customersLoaded.value = true;
+    // 加载 ICP 列表供筛选
+    try {
+      const { data } = await api.get("/icps", { params: { page: 1, page_size: 50 } });
+      icpFilterOptions.value = data.items || [];
+    } catch { icpFilterOptions.value = []; }
   } catch (err: any) {
     ElMessage.error(err?.response?.data?.detail || "加载客户列表失败");
     customers.value = [];
