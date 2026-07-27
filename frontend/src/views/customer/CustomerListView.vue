@@ -387,40 +387,40 @@
 
     <!-- 搜索任务详情弹窗 -->
     <el-dialog v-model="taskDetailDialog.visible" title="搜索任务详情" width="520px" :close-on-click-modal="false">
-      <template v-if="taskDetailDialog.task">
+      <template v-if="taskDetailData">
         <div class="task-detail">
           <div class="task-detail-row">
             <span class="task-detail-label">客户画像</span>
-            <span class="task-detail-value">{{ taskDetailDialog.task.icp_name }}</span>
+            <span class="task-detail-value">{{ taskDetailData.icp_name }}</span>
           </div>
           <div class="task-detail-row">
             <span class="task-detail-label">搜索渠道</span>
-            <span class="task-detail-value">{{ taskDetailDialog.task.channels?.join(', ') }}</span>
+            <span class="task-detail-value">{{ taskDetailData.channels?.join(', ') }}</span>
           </div>
           <div class="task-detail-row">
             <span class="task-detail-label">状态</span>
-            <el-tag v-if="taskDetailDialog.task.status === 'completed'" type="success" size="small">已完成</el-tag>
-            <el-tag v-else-if="taskDetailDialog.task.status === 'failed'" type="danger" size="small">失败</el-tag>
+            <el-tag v-if="taskDetailData.status === 'completed'" type="success" size="small">已完成</el-tag>
+            <el-tag v-else-if="taskDetailData.status === 'failed'" type="danger" size="small">失败</el-tag>
             <el-tag v-else type="warning" size="small">进行中</el-tag>
           </div>
           <div class="task-detail-row">
             <span class="task-detail-label">创建时间</span>
-            <span class="task-detail-value">{{ new Date(taskDetailDialog.task.created_at).toLocaleString('zh-CN') }}</span>
+            <span class="task-detail-value">{{ new Date(taskDetailData.created_at).toLocaleString('zh-CN') }}</span>
           </div>
-          <template v-if="taskDetailDialog.task.status === 'completed'">
+          <template v-if="taskDetailData.status === 'completed'">
             <el-divider />
             <div class="task-detail-section-title">搜索统计</div>
             <div class="task-detail-stats">
               <div class="task-detail-stat">
-                <span class="stat-num">{{ taskDetailDialog.task.result?.total_found || 0 }}</span>
+                <span class="stat-num">{{ taskDetailData.result?.total_found || 0 }}</span>
                 <span class="stat-label">搜索命中</span>
               </div>
               <div class="task-detail-stat">
-                <span class="stat-num">{{ taskDetailDialog.task.result?.saved_count || 0 }}</span>
+                <span class="stat-num">{{ taskDetailData.result?.saved_count || 0 }}</span>
                 <span class="stat-label">保存客户</span>
               </div>
               <div class="task-detail-stat">
-                <span class="stat-num">{{ (taskDetailDialog.task.result?.contact_search_count || 0) + (taskDetailDialog.task.result?.enriched_count || 0) }}</span>
+                <span class="stat-num">{{ (taskDetailData.result?.contact_search_count || 0) + (taskDetailData.result?.enriched_count || 0) }}</span>
                 <span class="stat-label">发现联系人</span>
               </div>
             </div>
@@ -430,34 +430,34 @@
               <div class="breakdown-item">
                 <span class="breakdown-dot" style="background:#6366f1"></span>
                 <span>定向搜索</span>
-                <span class="breakdown-count">{{ taskDetailDialog.task.result?.contact_search_count || 0 }}</span>
+                <span class="breakdown-count">{{ taskDetailData.result?.contact_search_count || 0 }}</span>
               </div>
               <div class="breakdown-item">
                 <span class="breakdown-dot" style="background:#22c55e"></span>
                 <span>网站抓取</span>
-                <span class="breakdown-count">{{ taskDetailDialog.task.result?.enriched_count || 0 }}</span>
+                <span class="breakdown-count">{{ taskDetailData.result?.enriched_count || 0 }}</span>
               </div>
             </div>
           </template>
-          <template v-else-if="taskDetailDialog.task.status === 'running' || taskDetailDialog.task.status === 'pending'">
+          <template v-else-if="taskDetailData.status === 'running' || taskDetailData.status === 'pending'">
             <el-divider />
             <div class="task-detail-section-title">当前进度</div>
             <div class="task-detail-progress">
-              <p>{{ taskDetailDialog.task.progress_message }}</p>
-              <el-progress :percentage="progressPercent(taskDetailDialog.task)" :show-text="true" />
+              <p>{{ taskDetailData.progress_message }}</p>
+              <el-progress :percentage="progressPercent(taskDetailData)" :show-text="true" />
             </div>
           </template>
-          <template v-else-if="taskDetailDialog.task.status === 'failed'">
+          <template v-else-if="taskDetailData.status === 'failed'">
             <el-divider />
             <div class="task-detail-section-title">错误信息</div>
-            <el-alert type="error" :title="taskDetailDialog.task.error || '未知错误'" :closable="false" show-icon />
+            <el-alert type="error" :title="taskDetailData.error || '未知错误'" :closable="false" show-icon />
           </template>
         </div>
       </template>
       <template #footer>
         <el-button @click="taskDetailDialog.visible = false">关闭</el-button>
-        <el-button v-if="taskDetailDialog.task?.status === 'completed' || taskDetailDialog.task?.status === 'failed'"
-          type="primary" @click="dismissTask(taskDetailDialog.task?.task_id || ''); taskDetailDialog.visible = false">
+        <el-button v-if="taskDetailData?.status === 'completed' || taskDetailData?.status === 'failed'"
+          type="primary" @click="dismissTask(taskDetailData?.task_id || ''); taskDetailDialog.visible = false">
           关闭并移除
         </el-button>
       </template>
@@ -814,9 +814,11 @@ const tasksExpanded = ref(true);
 const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null);
 const taskDetailDialog = reactive({
   visible: false,
-  task: null as SearchTask | null,
+  taskId: "" as string,
 });
-
+const taskDetailData = computed(() =>
+  searchTasks.value.find((t) => t.task_id === taskDetailDialog.taskId) || null
+);
 const activeTaskCount = computed(() =>
   searchTasks.value.filter((t) => t.status === "pending" || t.status === "running").length
 );
@@ -928,15 +930,15 @@ function stopPolling() {
 }
 
 function openTaskDetail(task: SearchTask) {
-  taskDetailDialog.task = task;
+  taskDetailDialog.taskId = task.task_id;
   taskDetailDialog.visible = true;
 }
 
 function dismissTask(taskId: string) {
   searchTasks.value = searchTasks.value.filter((t) => t.task_id !== taskId);
-  if (taskDetailDialog.task?.task_id === taskId) {
+  if (taskDetailData.value?.task_id === taskId) {
     taskDetailDialog.visible = false;
-    taskDetailDialog.task = null;
+    taskDetailDialog.taskId = "";
   }
 }
 
