@@ -47,7 +47,6 @@ from app.services.enrichment.customer_enricher import CustomerEnricher
 from app.services.enrichment.contact_scraper import ContactScraper
 from app.services.enrichment.hunter_service import HunterService
 from app.services.search.base import SearchResult
-from app.services.search.google_channel import GoogleSearchChannel
 from app.services.search.linkedin_channel import LinkedInSearchChannel
 from app.services.search.linkedin_people_channel import LinkedInPeopleSearchChannel
 from app.services.search.duckduckgo_channel import DuckDuckGoSearchChannel
@@ -657,8 +656,8 @@ async def export_customers(
 
 _CHANNELS_MAP = {
     "ai": AISearchChannel,
-    "google": GoogleSearchChannel,
-    "serper": SerperSearchChannel,
+    "google": SerperSearchChannel,
+    "serper": SerperSearchChannel,  # 保留兼容
     "linkedin": LinkedInSearchChannel,
     "linkedin_people": LinkedInPeopleSearchChannel,
     "duckduckgo": DuckDuckGoSearchChannel,
