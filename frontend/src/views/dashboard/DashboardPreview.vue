@@ -1,239 +1,257 @@
 <template>
   <div class="dashboard-preview">
-    <!-- ── 欢迎横幅 ── -->
-    <section class="hero-banner">
-      <div class="hero-banner__greeting">
-        <h1>你好，{{ authStore.user?.name || '用户' }}<span class="wave">👋</span></h1>
-        <p class="hero-banner__sub">AI 外贸助手已就绪，今日待办与关键数据一览</p>
+    <!-- ═══ 问候卡片（白底，非暗色横幅） ═══ -->
+    <div class="greeting-card">
+      <div class="greeting-card__left">
+        <h1 class="greeting-card__hi">Hi, {{ authStore.user?.name || '用户' }}<span class="wave">👋</span></h1>
+        <p class="greeting-card__sub">AI 外贸助手已就绪，助你高效开拓海外市场</p>
       </div>
-      <div class="hero-banner__kpis">
-        <div class="hero-kpi">
-          <span class="hero-kpi__num">{{ stats.total_customers || 0 }}</span>
-          <span class="hero-kpi__label">获取客户</span>
+      <div class="greeting-card__right">
+        <div class="greeting-stat">
+          <span class="greeting-stat__num">{{ stats.total_customers || 0 }}</span>
+          <span class="greeting-stat__label">获取客户</span>
         </div>
-        <div class="hero-kpi">
-          <span class="hero-kpi__num">{{ stats.total_emails_sent || 0 }}</span>
-          <span class="hero-kpi__label">已发邮件</span>
+        <div class="greeting-stat">
+          <span class="greeting-stat__num">{{ stats.completed_icps || 0 }}</span>
+          <span class="greeting-stat__label">客户画像</span>
         </div>
-        <div class="hero-kpi">
-          <span class="hero-kpi__num">{{ stats.total_customers ? (stats.reply_rate * 100).toFixed(0) + '%' : '—' }}</span>
-          <span class="hero-kpi__label">回复率</span>
+        <div class="greeting-stat">
+          <span class="greeting-stat__num">{{ stats.total_emails_sent || 0 }}</span>
+          <span class="greeting-stat__label">已发邮件</span>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- ── 快捷操作 ── -->
-    <section class="quick-actions">
-      <div class="quick-action-card" @click="$router.push('/app/customers')">
-        <div class="qa-icon qa-icon--accent">
-          <el-icon :size="20"><MagicStick /></el-icon>
+    <!-- ═══ 快捷入口（4 卡片，仅图标+标题） ═══ -->
+    <div class="quick-row">
+      <div class="quick-card" @click="$router.push('/app/customers')">
+        <div class="quick-card__icon qci--gradient">
+          <el-icon :size="18"><MagicStick /></el-icon>
         </div>
-        <span class="qa-label">AI 全渠道获客</span>
+        <span class="quick-card__label">AI 全渠道获客</span>
       </div>
-      <div class="quick-action-card" @click="$router.push('/app/icps')">
-        <div class="qa-icon qa-icon--blue">
-          <el-icon :size="20"><PictureFilled /></el-icon>
+      <div class="quick-card" @click="$router.push('/app/icps')">
+        <div class="quick-card__icon qci--blue">
+          <el-icon :size="18"><PictureFilled /></el-icon>
         </div>
-        <span class="qa-label">客户画像</span>
+        <span class="quick-card__label">客户画像</span>
       </div>
-      <div class="quick-action-card" @click="$router.push('/app/enterprise')">
-        <div class="qa-icon qa-icon--green">
-          <el-icon :size="20"><OfficeBuilding /></el-icon>
+      <div class="quick-card" @click="$router.push('/app/enterprise')">
+        <div class="quick-card__icon qci--green">
+          <el-icon :size="18"><OfficeBuilding /></el-icon>
         </div>
-        <span class="qa-label">企业资料</span>
+        <span class="quick-card__label">企业资料</span>
       </div>
-      <div class="quick-action-card" @click="$router.push('/app/email')">
-        <div class="qa-icon qa-icon--purple">
-          <el-icon :size="20"><Message /></el-icon>
+      <div class="quick-card" @click="$router.push('/app/email')">
+        <div class="quick-card__icon qci--purple">
+          <el-icon :size="18"><Message /></el-icon>
         </div>
-        <span class="qa-label">邮件营销</span>
+        <span class="quick-card__label">邮件营销</span>
       </div>
-    </section>
+    </div>
 
-    <!-- ── 双栏主体 ── -->
-    <section class="main-grid">
-      <!-- 左栏：最近动态 -->
-      <div class="main-left">
-        <div class="panel panel--activity">
-          <div class="panel__header">
-            <h3 class="panel__title">最近动态</h3>
-            <span class="panel__badge">{{ activities.length }} 条</span>
-          </div>
-          <div class="activity-list">
-            <div v-for="item in activities" :key="item.id" class="activity-item">
-              <div class="activity-dot" :class="'dot--' + item.type" />
-              <div class="activity-body">
-                <span class="activity-title">{{ item.title }}</span>
-                <span class="activity-desc">{{ item.desc }}</span>
+    <!-- ═══ 双栏主体 ═══ -->
+    <div class="main-two-col">
+      <!-- 左栏：最新动态 -->
+      <div class="panel panel--activity">
+        <div class="panel__head">
+          <h3 class="panel__title">最新动态</h3>
+          <a class="panel__more" href="javascript:void(0)">更多 →</a>
+        </div>
+        <div class="panel__body">
+          <template v-if="activities.length > 0">
+            <div v-for="item in activities" :key="item.id" class="feed-item">
+              <span class="feed-dot" :class="'dot--' + item.type"></span>
+              <div class="feed-body">
+                <span class="feed-title">{{ item.title }}</span>
+                <span class="feed-desc">{{ item.desc }}</span>
               </div>
-              <span class="activity-time">{{ item.time }}</span>
+              <span class="feed-time">{{ item.time }}</span>
             </div>
-            <div v-if="activities.length === 0" class="activity-empty">
-              <span>暂无动态，快去搜索客户吧</span>
-            </div>
-          </div>
+          </template>
+          <div v-else class="feed-empty">暂无动态，完善企业资料后开始 AI 获客</div>
         </div>
       </div>
 
-      <!-- 右栏：数据概览 + 待办 -->
-      <div class="main-right">
-        <!-- 数据概览卡片 -->
-        <div class="panel panel--stats">
-          <div class="panel__header">
-            <h3 class="panel__title">数据概览</h3>
+      <!-- 右栏：日历 + 任务 -->
+      <div class="right-col">
+        <!-- 迷你日历 -->
+        <div class="panel panel--calendar">
+          <div class="panel__head">
+            <h3 class="panel__title">{{ calendarYear }} 年 {{ calendarMonth }} 月</h3>
+            <div class="cal-nav">
+              <button class="cal-nav__btn" @click="prevMonth">&lt;</button>
+              <button class="cal-nav__btn" @click="nextMonth">&gt;</button>
+            </div>
           </div>
-          <div class="mini-stats">
-            <div class="mini-stat">
-              <div class="mini-stat__icon" style="background:#eff6ff;color:#3b82f6;">
-                <el-icon :size="16"><PictureFilled /></el-icon>
-              </div>
-              <div class="mini-stat__info">
-                <span class="mini-stat__val">{{ stats.total_icps }}</span>
-                <span class="mini-stat__lbl">客户画像</span>
-              </div>
-              <span class="mini-stat__sub">{{ stats.completed_icps || 0 }} 已完成</span>
+          <div class="panel__body cal-body">
+            <div class="cal-weekdays">
+              <span v-for="d in weekLabels" :key="d" class="cal-wd">{{ d }}</span>
             </div>
-            <div class="mini-stat">
-              <div class="mini-stat__icon" style="background:#ecfdf5;color:#10b981;">
-                <el-icon :size="16"><UserFilled /></el-icon>
-              </div>
-              <div class="mini-stat__info">
-                <span class="mini-stat__val">{{ stats.total_customers || '—' }}</span>
-                <span class="mini-stat__lbl">获取客户</span>
-              </div>
-              <span class="mini-stat__sub">{{ stats.customers_reached || 0 }} 已触达</span>
-            </div>
-            <div class="mini-stat">
-              <div class="mini-stat__icon" style="background:#fffbeb;color:#f59e0b;">
-                <el-icon :size="16"><TrendCharts /></el-icon>
-              </div>
-              <div class="mini-stat__info">
-                <span class="mini-stat__val">{{ stats.total_customers ? (stats.reach_rate * 100).toFixed(0) + '%' : '—' }}</span>
-                <span class="mini-stat__lbl">触达率</span>
-              </div>
-              <span class="mini-stat__sub">触达 / 总客户</span>
-            </div>
-            <div class="mini-stat">
-              <div class="mini-stat__icon" style="background:#f5f3ff;color:#6366f1;">
-                <el-icon :size="16"><Message /></el-icon>
-              </div>
-              <div class="mini-stat__info">
-                <span class="mini-stat__val">{{ stats.total_emails_sent ? (stats.reply_rate * 100).toFixed(0) + '%' : '—' }}</span>
-                <span class="mini-stat__lbl">回复率</span>
-              </div>
-              <span class="mini-stat__sub">已回复 / 已发送</span>
+            <div class="cal-grid">
+              <span
+                v-for="(d, i) in calendarDays"
+                :key="i"
+                class="cal-day"
+                :class="{
+                  'cal-day--other': !d.current,
+                  'cal-day--today': d.isToday,
+                  'cal-day--active': d.isActive,
+                }"
+              >{{ d.day }}</span>
             </div>
           </div>
         </div>
 
-        <!-- 系统进度 -->
-        <div class="panel panel--progress">
-          <div class="panel__header">
-            <h3 class="panel__title">系统进度</h3>
-            <span class="progress-pct">{{ setupStep }}/4</span>
+        <!-- 任务列表 -->
+        <div class="panel panel--tasks">
+          <div class="panel__head">
+            <h3 class="panel__title">任务列表</h3>
+            <span class="task-count">{{ doneCount }}/{{ taskItems.length }}</span>
           </div>
-          <div class="progress-list">
-            <div class="progress-item" :class="{ done: enterpriseDone }">
-              <el-icon v-if="enterpriseDone" :size="14" class="prog-check"><CircleCheckFilled /></el-icon>
-              <el-icon v-else :size="14" class="prog-pending"><RemoveFilled /></el-icon>
-              <span>企业资料与产品</span>
-            </div>
-            <div class="progress-item" :class="{ done: stats.completed_icps > 0 }">
-              <el-icon v-if="stats.completed_icps > 0" :size="14" class="prog-check"><CircleCheckFilled /></el-icon>
-              <el-icon v-else :size="14" class="prog-pending"><RemoveFilled /></el-icon>
-              <span>生成客户画像</span>
-            </div>
-            <div class="progress-item" :class="{ done: stats.total_customers > 0 }">
-              <el-icon v-if="stats.total_customers > 0" :size="14" class="prog-check"><CircleCheckFilled /></el-icon>
-              <el-icon v-else :size="14" class="prog-pending"><RemoveFilled /></el-icon>
-              <span>AI 搜索客户</span>
-            </div>
-            <div class="progress-item" :class="{ done: stats.total_emails_sent > 0 }">
-              <el-icon v-if="stats.total_emails_sent > 0" :size="14" class="prog-check"><CircleCheckFilled /></el-icon>
-              <el-icon v-else :size="14" class="prog-pending"><RemoveFilled /></el-icon>
-              <span>发送营销邮件</span>
+          <div class="panel__body task-list">
+            <div
+              v-for="t in taskItems"
+              :key="t.key"
+              class="task-item"
+              :class="{ 'task-item--done': t.done }"
+              @click="t.done = !t.done"
+            >
+              <span class="task-check" :class="{ checked: t.done }">
+                <el-icon v-if="t.done" :size="12"><Check /></el-icon>
+              </span>
+              <span class="task-text">{{ t.label }}</span>
             </div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { OfficeBuilding, PictureFilled, ArrowRight, UserFilled, TrendCharts, Message, MagicStick, CircleCheckFilled, RemoveFilled } from '@element-plus/icons-vue'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { OfficeBuilding, PictureFilled, Message, MagicStick, Check } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api/client'
 
 const authStore = useAuthStore()
 
+// ── 数据 ──
 interface DashboardStats {
-  total_icps: number
-  completed_icps: number
-  total_customers: number
-  customers_reached: number
-  reach_rate: number
-  total_emails_sent: number
-  reply_rate: number
+  total_icps: number; completed_icps: number
+  total_customers: number; customers_reached: number; reach_rate: number
+  total_emails_sent: number; reply_rate: number
 }
-
 const stats = ref<DashboardStats>({
   total_icps: 0, completed_icps: 0,
   total_customers: 0, customers_reached: 0, reach_rate: 0,
   total_emails_sent: 0, reply_rate: 0,
 })
 
-const enterpriseDone = ref(false)
-
-const setupStep = computed(() => {
-  let s = 1
-  if (enterpriseDone.value) s = 2
-  if (stats.value.completed_icps > 0) s = 3
-  if (stats.value.total_customers > 0) s = 4
-  if (stats.value.total_emails_sent > 0) s = 5  // extra
-  return Math.min(s, 4)
-})
-
-// 模拟活动数据（后续接真实 API）
-interface Activity {
-  id: string; type: string; title: string; desc: string; time: string
-}
+// ── 活动动态 ──
+interface Activity { id: string; type: string; title: string; desc: string; time: string }
 const activities = ref<Activity[]>([])
 
 function buildActivities(s: DashboardStats) {
-  const result: Activity[] = []
-  if (s.total_customers > 0) {
-    result.push({ id: '1', type: 'customer', title: '客户获取', desc: `共获取 ${s.total_customers} 个潜在客户`, time: '最新' })
-  }
-  if (s.total_emails_sent > 0) {
-    result.push({ id: '2', type: 'email', title: '邮件营销', desc: `已发送 ${s.total_emails_sent} 封营销邮件`, time: '最新' })
-  }
-  if (s.completed_icps > 0) {
-    result.push({ id: '3', type: 'icp', title: '客户画像', desc: `已完成 ${s.completed_icps} 个客户画像`, time: '最新' })
-  }
-  if (s.total_customers > 0 && s.customers_reached > 0) {
-    result.push({ id: '4', type: 'reach', title: '客户触达', desc: `触达率 ${(s.reach_rate * 100).toFixed(0)}%，${s.customers_reached} 个客户已联系`, time: '最新' })
-  }
-  if (result.length === 0) {
-    result.push({ id: '0', type: 'welcome', title: '欢迎使用', desc: '完善企业资料后开始 AI 智能获客', time: '现在' })
-  }
-  activities.value = result
+  const a: Activity[] = []
+  if (s.total_customers > 0) a.push({ id: '1', type: 'customer', title: '客户获取', desc: `已获取 ${s.total_customers} 个潜在客户`, time: '刚刚' })
+  if (s.completed_icps > 0) a.push({ id: '2', type: 'icp', title: '客户画像', desc: `${s.completed_icps} 个画像已完成生成`, time: '刚刚' })
+  if (s.total_emails_sent > 0) a.push({ id: '3', type: 'email', title: '邮件营销', desc: `累计发送 ${s.total_emails_sent} 封营销邮件`, time: '刚刚' })
+  if (s.total_customers > 0 && s.customers_reached > 0) a.push({ id: '4', type: 'reach', title: '客户触达', desc: `已触达 ${s.customers_reached} 个客户，触达率 ${(s.reach_rate * 100).toFixed(0)}%`, time: '刚刚' })
+  if (a.length === 0) a.push({ id: '0', type: 'welcome', title: '欢迎使用 AI 外贸助手', desc: '完善企业资料后开始 AI 智能获客', time: '现在' })
+  activities.value = a
 }
 
+// ── 企业状态 ──
+const enterpriseDone = ref(false)
+
+// ── 任务列表 ──
+const taskItems = reactive([
+  { key: 'enterprise', label: '完善企业资料与产品信息', done: false },
+  { key: 'icp',       label: '生成目标客户画像',       done: false },
+  { key: 'customer',  label: 'AI 全渠道搜索客户',      done: false },
+  { key: 'email',     label: '创建邮件模板并发送营销',  done: false },
+])
+const doneCount = computed(() => taskItems.filter(t => t.done).length)
+
+function syncTasks() {
+  taskItems[0].done = enterpriseDone.value
+  taskItems[1].done = stats.value.completed_icps > 0
+  taskItems[2].done = stats.value.total_customers > 0
+  taskItems[3].done = stats.value.total_emails_sent > 0
+}
+
+// ── 迷你日历 ──
+const now = new Date()
+const calendarYear = ref(now.getFullYear())
+const calendarMonth = ref(now.getMonth() + 1) // 1-based
+const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
+
+interface CalDay { day: number; current: boolean; isToday: boolean; isActive: boolean }
+const calendarDays = computed<CalDay[]>(() => {
+  const y = calendarYear.value
+  const m = calendarMonth.value - 1 // Date month is 0-based
+  const firstDay = new Date(y, m, 1)
+  const startDayOfWeek = firstDay.getDay() || 7 // Mon=1 ... Sun=7
+  const daysInMonth = new Date(y, m + 1, 0).getDate()
+  const daysInPrev = new Date(y, m, 0).getDate()
+
+  const today = new Date()
+  const todayY = today.getFullYear()
+  const todayM = today.getMonth()
+  const todayD = today.getDate()
+
+  const result: CalDay[] = []
+
+  // 上月填充
+  for (let i = startDayOfWeek - 1; i > 0; i--) {
+    const d = daysInPrev - i + 1
+    result.push({ day: d, current: false, isToday: false, isActive: false })
+  }
+
+  // 当月
+  for (let d = 1; d <= daysInMonth; d++) {
+    result.push({
+      day: d,
+      current: true,
+      isToday: y === todayY && m === todayM && d === todayD,
+      isActive: false, // 后续可接真实活动日期
+    })
+  }
+
+  // 下月填充
+  const remaining = 7 - (result.length % 7)
+  if (remaining < 7) {
+    for (let d = 1; d <= remaining; d++) {
+      result.push({ day: d, current: false, isToday: false, isActive: false })
+    }
+  }
+
+  return result
+})
+
+function prevMonth() {
+  if (calendarMonth.value === 1) { calendarMonth.value = 12; calendarYear.value-- }
+  else calendarMonth.value--
+}
+function nextMonth() {
+  if (calendarMonth.value === 12) { calendarMonth.value = 1; calendarYear.value++ }
+  else calendarMonth.value++
+}
+
+// ── 加载 ──
 async function loadStats() {
   try {
     const { data } = await api.get('/dashboard/stats', { silent: true })
     stats.value = { ...stats.value, ...data }
-    buildActivities(stats.value)
-  } catch { /* not critical */ }
+  } catch { /* */ }
+  buildActivities(stats.value)
+  syncTasks()
 }
-
 async function loadEnterprise() {
-  try {
-    await api.get('/enterprise', { silent: true })
-    enterpriseDone.value = true
-  } catch { /* 404 — not yet */ }
+  try { await api.get('/enterprise', { silent: true }); enterpriseDone.value = true } catch { /* */ }
+  syncTasks()
 }
 
 onMounted(async () => {
@@ -242,71 +260,45 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="scss">
-// ── 变量 ──
-$radius-lg: 16px;
-$radius-md: 12px;
-$border: #e9ecf1;
-$text-1: #0f172a;
-$text-2: #475569;
-$text-3: #94a3b8;
+// ══════════════════════════════════════════
+// 设计参考 /docs/UI/工作台.png
+// 风格：浅灰背景 + 白色卡片 + 极淡投影
+// ══════════════════════════════════════════
 
-// ── 欢迎横幅 ──
-.hero-banner {
-  background: linear-gradient(135deg, #0b1a2e 0%, #132742 40%, #1a3a5c 70%, #1d4ed8 100%);
-  border-radius: $radius-lg;
-  padding: 32px 40px;
-  margin-bottom: 24px;
+$bg:        #f5f6f8;
+$card-bg:   #fff;
+$border:    #eaecef;
+$shadow:    0 1px 2px rgba(0,0,0,.04);
+$shadow-hv: 0 4px 12px rgba(0,0,0,.06);
+$radius:    14px;
+$text-1:    #1a1a2e;
+$text-2:    #5a5f6e;
+$text-3:    #949aab;
+
+.dashboard-preview {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+// ── 问候卡片（白底，参考图无暗色横幅） ──
+.greeting-card {
+  background: $card-bg;
+  border: 1px solid $border;
+  border-radius: $radius;
+  box-shadow: $shadow;
+  padding: 24px 32px;
+  margin-bottom: 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  position: relative;
-  overflow: hidden;
 
-  // 装饰光晕
-  &::before {
-    content: '';
-    position: absolute;
-    width: 320px; height: 320px;
-    background: radial-gradient(circle, rgba(59,130,246,.15) 0%, transparent 70%);
-    top: -80px; right: -60px;
-    pointer-events: none;
+  &__left {
+    h1 { margin: 0 0 4px; font-size: 20px; font-weight: 700; color: $text-1; }
+    .wave { display: inline-block; animation: wave 2s ease-in-out infinite; transform-origin: 70% 70%; }
   }
-  &::after {
-    content: '';
-    position: absolute;
-    width: 200px; height: 200px;
-    background: radial-gradient(circle, rgba(99,102,241,.12) 0%, transparent 70%);
-    bottom: -60px; left: 30%;
-    pointer-events: none;
-  }
+  &__sub { margin: 0; font-size: 13px; color: $text-3; }
 
-  &__greeting {
-    position: relative;
-    z-index: 1;
-    h1 {
-      margin: 0 0 6px;
-      font-size: 22px; font-weight: 700;
-      color: #fff;
-      letter-spacing: -.3px;
-    }
-    .wave {
-      display: inline-block;
-      animation: wave 2s ease-in-out infinite;
-      transform-origin: 70% 70%;
-    }
-  }
-  &__sub {
-    margin: 0;
-    font-size: 13px;
-    color: rgba(255,255,255,.55);
-  }
-
-  &__kpis {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    gap: 40px;
-  }
+  &__right { display: flex; gap: 36px; }
 }
 
 @keyframes wave {
@@ -315,240 +307,156 @@ $text-3: #94a3b8;
   75% { transform: rotate(-8deg); }
 }
 
-.hero-kpi {
+.greeting-stat {
   text-align: center;
-  &__num {
-    display: block;
-    font-size: 24px; font-weight: 800;
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-    letter-spacing: -.5px;
-  }
-  &__label {
-    font-size: 11px;
-    color: rgba(255,255,255,.5);
-    margin-top: 2px;
-  }
+  &__num   { display: block; font-size: 22px; font-weight: 700; color: $text-1; }
+  &__label { font-size: 11px; color: $text-3; margin-top: 1px; }
 }
 
-// ── 快捷操作 ──
-.quick-actions {
+// ── 快捷入口（4 卡片横排，仅图标+标题） ──
+.quick-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
-  margin-bottom: 24px;
-
-  @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); }
+  margin-bottom: 18px;
 }
 
-.quick-action-card {
-  background: #fff;
+.quick-card {
+  background: $card-bg;
   border: 1px solid $border;
-  border-radius: $radius-md;
-  padding: 18px 20px;
+  border-radius: $radius;
+  box-shadow: $shadow;
+  padding: 18px 16px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   cursor: pointer;
-  transition: all .2s;
-  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  transition: all .18s;
+  &:hover { border-color: #3b82f6; box-shadow: $shadow-hv; }
 
-  &:hover {
-    border-color: #3b82f6;
-    box-shadow: 0 4px 14px rgba(59,130,246,.08);
-    transform: translateY(-1px);
+  &__icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
   }
+  &__label { font-size: 13px; font-weight: 600; color: $text-1; white-space: nowrap; }
 }
 
-.qa-icon {
-  width: 42px; height: 42px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  &--accent { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
-  &--blue   { background: #eff6ff; color: #3b82f6; }
-  &--green  { background: #ecfdf5; color: #10b981; }
-  &--purple { background: #f5f3ff; color: #6366f1; }
-}
+.qci--gradient { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+.qci--blue     { background: #eef2ff; color: #4f6ef7; }
+.qci--green    { background: #eafaf1; color: #22c55e; }
+.qci--purple   { background: #f3f0ff; color: #7c3aed; }
 
-.qa-label {
-  font-size: 14px; font-weight: 600;
-  color: $text-1;
-}
-
-// ── 双栏主体 ──
-.main-grid {
+// ── 双栏 ──
+.main-two-col {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 20px;
-
-  @media (max-width: 1024px) { grid-template-columns: 1fr; }
+  grid-template-columns: 1fr 340px;
+  gap: 18px;
+  align-items: start;
 }
 
 // ── 通用面板 ──
 .panel {
-  background: #fff;
+  background: $card-bg;
   border: 1px solid $border;
-  border-radius: $radius-lg;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  border-radius: $radius;
+  box-shadow: $shadow;
 
-  &__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 24px 0;
-    margin-bottom: 14px;
+  &__head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 22px 0;
+    margin-bottom: 10px;
   }
-  &__title {
-    margin: 0;
-    font-size: 15px; font-weight: 700;
-    color: $text-1;
-    letter-spacing: -.2px;
-  }
-  &__badge {
-    font-size: 11px; color: $text-3;
-    background: #f1f5f9;
-    padding: 2px 10px; border-radius: 10px;
-  }
+  &__title { margin: 0; font-size: 14px; font-weight: 700; color: $text-1; }
+  &__more  { font-size: 12px; color: $text-3; text-decoration: none; &:hover { color: #3b82f6; } }
+  &__body { padding: 0 22px 18px; }
 }
 
-// ── 最近动态 ──
-.panel--activity {
-  .panel__header {
-    padding: 20px 24px 0;
-  }
-}
-
-.activity-list {
-  padding: 0 24px 20px;
-}
-
-.activity-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid #f1f5f9;
+// ── 动态列表 ──
+.feed-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid #f2f3f5;
   &:last-child { border-bottom: none; }
 }
 
-.activity-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  margin-top: 6px;
-  flex-shrink: 0;
+.feed-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  margin-top: 5px; flex-shrink: 0;
   &.dot--customer { background: #3b82f6; }
-  &.dot--email    { background: #6366f1; }
-  &.dot--icp      { background: #10b981; }
+  &.dot--icp      { background: #22c55e; }
+  &.dot--email    { background: #7c3aed; }
   &.dot--reach    { background: #f59e0b; }
-  &.dot--welcome  { background: #94a3b8; }
+  &.dot--welcome  { background: #c0c7d0; }
 }
 
-.activity-body {
+.feed-body {
   flex: 1; min-width: 0;
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 1px;
 }
+.feed-title { font-size: 13px; font-weight: 600; color: $text-1; }
+.feed-desc  { font-size: 12px; color: $text-3; line-height: 1.4; }
+.feed-time  { font-size: 11px; color: $text-3; flex-shrink: 0; margin-top: 2px; }
+.feed-empty { padding: 28px 0; text-align: center; font-size: 13px; color: $text-3; }
 
-.activity-title {
-  font-size: 13px; font-weight: 600;
-  color: $text-1;
-}
+// ── 右栏 ──
+.right-col { display: flex; flex-direction: column; gap: 18px; }
 
-.activity-desc {
-  font-size: 12px;
-  color: $text-3;
-  line-height: 1.4;
-}
-
-.activity-time {
-  font-size: 11px;
-  color: $text-3;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.activity-empty {
-  padding: 40px 0;
-  text-align: center;
-  color: $text-3;
-  font-size: 13px;
-}
-
-// ── 右栏：数据概览 ──
-.panel--stats {
-  margin-bottom: 20px;
-}
-
-.mini-stats {
-  padding: 0 24px 20px;
-  display: flex; flex-direction: column; gap: 12px;
-}
-
-.mini-stat {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  background: #f8fafc;
-  border-radius: 10px;
-  transition: background .15s;
-  &:hover { background: #f1f5f9; }
-
-  &__icon {
-    width: 34px; height: 34px;
-    border-radius: 8px;
+// ── 日历 ──
+.cal-nav {
+  display: flex; gap: 4px;
+  &__btn {
+    width: 24px; height: 24px; border: 1px solid $border; border-radius: 6px;
+    background: #fff; font-size: 12px; color: $text-2; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-  }
-  &__info {
-    flex: 1;
-    display: flex; flex-direction: column;
-  }
-  &__val {
-    font-size: 16px; font-weight: 700;
-    color: $text-1;
-    line-height: 1.2;
-  }
-  &__lbl {
-    font-size: 11px; color: $text-3;
-  }
-  &__sub {
-    font-size: 11px; color: $text-3;
-    flex-shrink: 0;
+    &:hover { border-color: #3b82f6; color: #3b82f6; }
   }
 }
 
-// ── 系统进度 ──
-.progress-pct {
-  font-size: 12px; font-weight: 600;
-  color: #3b82f6;
+.cal-body { padding-bottom: 16px !important; }
+
+.cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 6px;
+}
+.cal-wd { text-align: center; font-size: 11px; color: $text-3; padding: 4px 0; }
+
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+}
+.cal-day {
+  text-align: center; font-size: 12px; color: $text-1;
+  padding: 5px 0; border-radius: 6px; cursor: default;
+  &--other { color: #d0d4dd; }
+  &--today { background: #3b82f6; color: #fff; font-weight: 600; }
+  &--active { background: #eef2ff; color: #3b82f6; font-weight: 600; }
 }
 
-.progress-list {
-  padding: 0 24px 20px;
-  display: flex; flex-direction: column; gap: 4px;
-}
+// ── 任务列表 ──
+.task-count { font-size: 12px; color: $text-3; }
 
-.progress-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 13px; color: $text-2;
-  transition: background .15s;
+.task-list { display: flex; flex-direction: column; gap: 2px; }
 
-  &:hover { background: #f8fafc; }
+.task-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 10px; border-radius: 8px;
+  cursor: pointer; transition: background .15s;
+  font-size: 13px; color: $text-1;
+  &:hover { background: #f8f9fb; }
 
-  &.done {
-    color: $text-1;
-    .prog-check { color: #10b981; }
+  &--done {
+    .task-text { color: $text-3; text-decoration: line-through; }
   }
 }
 
-.prog-check { color: #10b981; flex-shrink: 0; }
-.prog-pending { color: #cbd5e1; flex-shrink: 0; }
+.task-check {
+  width: 18px; height: 18px; border-radius: 5px;
+  border: 1.5px solid #d0d4dd;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  &.checked { background: #22c55e; border-color: #22c55e; color: #fff; }
+}
+
+.task-text { flex: 1; }
 </style>
