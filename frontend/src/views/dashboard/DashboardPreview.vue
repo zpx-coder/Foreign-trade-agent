@@ -3,7 +3,7 @@
     <!-- ═══ KPI 指标卡 ═══ -->
     <div class="kpi-row">
       <div class="kpi-card">
-        <div class="kpi-icon kpi-icon--crimson"><el-icon :size="18"><UserFilled /></el-icon></div>
+        <div class="kpi-icon kpi-icon--teal"><el-icon :size="18"><UserFilled /></el-icon></div>
         <div class="kpi-body">
           <span class="kpi-val">{{ stats.total_customers || 0 }}</span>
           <span class="kpi-lbl">获取客户</span>
@@ -11,7 +11,7 @@
         </div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-icon kpi-icon--sage"><el-icon :size="18"><PictureFilled /></el-icon></div>
+        <div class="kpi-icon kpi-icon--lavender"><el-icon :size="18"><PictureFilled /></el-icon></div>
         <div class="kpi-body">
           <span class="kpi-val">{{ stats.completed_icps || 0 }}</span>
           <span class="kpi-lbl">客户画像</span>
@@ -19,7 +19,7 @@
         </div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-icon kpi-icon--royal"><el-icon :size="18"><Message /></el-icon></div>
+        <div class="kpi-icon kpi-icon--pink"><el-icon :size="18"><Message /></el-icon></div>
         <div class="kpi-body">
           <span class="kpi-val">{{ stats.total_emails_sent || 0 }}</span>
           <span class="kpi-lbl">已发邮件</span>
@@ -27,7 +27,7 @@
         </div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-icon kpi-icon--gold"><el-icon :size="18"><TrendCharts /></el-icon></div>
+        <div class="kpi-icon kpi-icon--peach"><el-icon :size="18"><TrendCharts /></el-icon></div>
         <div class="kpi-body">
           <span class="kpi-val">{{ stats.total_customers ? (stats.reach_rate * 100).toFixed(0) + '%' : '—' }}</span>
           <span class="kpi-lbl">触达率</span>
@@ -43,9 +43,9 @@
           <span class="chart-card__sub">近 30 天</span>
         </div>
         <div class="chart-legend">
-          <span class="legend-item"><i style="background:#E01F54;"></i>已发送</span>
-          <span class="legend-item"><i style="background:#b8d2c7;"></i>已打开</span>
-          <span class="legend-item"><i style="background:#2e4783;"></i>已回复</span>
+          <span class="legend-item"><i style="background:#2ec7c9;"></i>已发送</span>
+          <span class="legend-item"><i style="background:#b6a2de;"></i>已打开</span>
+          <span class="legend-item"><i style="background:#d87a80;"></i>已回复</span>
         </div>
         <div ref="emailRef" class="chart-body"></div>
       </div>
@@ -87,23 +87,30 @@ import { CanvasRenderer } from 'echarts/renderers'
 
 echarts.use([LineChart, PieChart, BarChart, FunnelChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
-// ── Roma 主题 ──
+// ── Macarons 主题 ──
 const R = [
-  '#E01F54', '#001852', '#f5e8c8', '#b8d2c7', '#c6b38e',
-  '#a4d8c2', '#f3d999', '#d3758f', '#dcc392', '#2e4783',
-  '#82b6e9', '#ff6347', '#a092f1', '#0a915d', '#eaf889',
-  '#6699FF', '#ff6666', '#3cb371', '#d5b158', '#38b6b6',
-  // R[0] crimson  R[1] navy    R[2] cream   R[3] sage
-  // R[4] tan      R[5] lt-sage R[6] gold    R[9] royal blue
-  // R[11] tomato  R[13] green  R[16] red    R[17] sea green
+  '#2ec7c9', '#b6a2de', '#5ab1ef', '#ffb980', '#d87a80',
+  '#8d98b3', '#e5cf0d', '#97b552', '#95706d', '#dc69aa',
+  '#07a2a4', '#9a7fd1', '#588dd5', '#f5994e', '#c05050',
+  '#59678c', '#c9ab00', '#7eb00a', '#6f5553', '#c14089',
+  // R[0] teal     R[1] lavender R[2] sky blue R[3] peach
+  // R[4] rose     R[7] olive    R[9] pink
 ]
 
-echarts.registerTheme('roma', {
+echarts.registerTheme('macarons', {
   color: R,
-  visualMap: { color: ['#e01f54', '#e7dbc3'], textStyle: { color: '#333' } },
-  candlestick: { itemStyle: { color: '#e01f54', color0: '#001852' }, lineStyle: { width: 1, color: '#f5e8c8', color0: '#b8d2c7' }, areaStyle: { color: '#a4d8c2', color0: '#f3d999' } },
-  graph: { itemStyle: { color: '#a4d8c2' }, linkStyle: { color: '#f3d999' } },
-  gauge: { axisLine: { lineStyle: { color: [[0.2, '#E01F54'], [0.8, '#b8d2c7'], [1, '#001852']], width: 8 } } },
+  title: { textStyle: { fontWeight: 'normal', color: '#008acd' } },
+  visualMap: { itemWidth: 15, color: ['#5ab1ef', '#e0ffff'] },
+  toolbox: { iconStyle: { borderColor: R[0] } },
+  tooltip: { borderWidth: 0, backgroundColor: 'rgba(50,50,50,0.5)', textStyle: { color: '#FFF' }, axisPointer: { type: 'line', lineStyle: { color: '#008acd' }, crossStyle: { color: '#008acd' }, shadowStyle: { color: 'rgba(200,200,200,0.2)' } } },
+  dataZoom: { dataBackgroundColor: '#efefff', fillerColor: 'rgba(182,162,222,0.2)', handleColor: '#008acd' },
+  grid: { borderColor: '#eee' },
+  categoryAxis: { axisLine: { lineStyle: { color: '#008acd' } }, splitLine: { lineStyle: { color: ['#eee'] } } },
+  valueAxis: { axisLine: { lineStyle: { color: '#008acd' } }, splitArea: { show: true, areaStyle: { color: ['rgba(250,250,250,0.1)', 'rgba(200,200,200,0.1)'] } }, splitLine: { lineStyle: { color: ['#eee'] } } },
+  line: { smooth: true, symbol: 'emptyCircle', symbolSize: 3 },
+  candlestick: { itemStyle: { color: '#d87a80', color0: '#2ec7c9' }, lineStyle: { width: 1, color: '#d87a80', color0: '#2ec7c9' }, areaStyle: { color: '#2ec7c9', color0: '#b6a2de' } },
+  graph: { itemStyle: { color: '#d87a80' }, linkStyle: { color: '#2ec7c9' } },
+  gauge: { axisLine: { lineStyle: { color: [[0.2, '#2ec7c9'], [0.8, '#5ab1ef'], [1, '#d87a80']], width: 10 } }, axisTick: { splitNumber: 10, length: 15, lineStyle: { color: 'auto' } }, splitLine: { length: 22, lineStyle: { color: 'auto' } }, pointer: { width: 5 } },
 })
 
 interface DashboardStats {
@@ -145,7 +152,7 @@ function makeTooltip(): any {
 // ── 1. 面积图（邮件趋势） ──
 function renderEmail() {
   if (!emailRef.value) return
-  const c = echarts.init(emailRef.value, 'roma')
+  const c = echarts.init(emailRef.value, 'macarons')
   charts.push(c)
   const data = stats.value.daily_email_stats
   const days = data.map(d => d.day.slice(5))
@@ -174,26 +181,26 @@ function renderEmail() {
         smooth: true, symbol: 'none',
         lineStyle: { color: R[0], width: 2.5 },
         areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(224,31,84,0.15)' },
-          { offset: 1, color: 'rgba(224,31,84,0.0)' },
+          { offset: 0, color: 'rgba(46,199,201,0.15)' },
+          { offset: 1, color: 'rgba(46,199,201,0.0)' },
         ])},
       },
       {
         name: '已打开', type: 'line', data: opened,
         smooth: true, symbol: 'none',
-        lineStyle: { color: R[3], width: 2.5 },
+        lineStyle: { color: R[1], width: 2.5 },
         areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(184,210,199,0.18)' },
-          { offset: 1, color: 'rgba(184,210,199,0.0)' },
+          { offset: 0, color: 'rgba(182,162,222,0.18)' },
+          { offset: 1, color: 'rgba(182,162,222,0.0)' },
         ])},
       },
       {
         name: '已回复', type: 'line', data: replied,
         smooth: true, symbol: 'none',
-        lineStyle: { color: R[9], width: 2, type: 'dashed' },
+        lineStyle: { color: R[4], width: 2, type: 'dashed' },
         areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(46,71,131,0.12)' },
-          { offset: 1, color: 'rgba(46,71,131,0.0)' },
+          { offset: 0, color: 'rgba(216,122,128,0.12)' },
+          { offset: 1, color: 'rgba(216,122,128,0.0)' },
         ])},
       },
     ],
@@ -203,7 +210,7 @@ function renderEmail() {
 // ── 2. 环形图（客户来源） ──
 function renderSource() {
   if (!sourceRef.value) return
-  const c = echarts.init(sourceRef.value, 'roma')
+  const c = echarts.init(sourceRef.value, 'macarons')
   charts.push(c)
   const data = stats.value.customer_sources
   const total = data.reduce((s, d) => s + d.value, 0)
@@ -218,7 +225,7 @@ function renderSource() {
     tooltip: { ...makeTooltip(), trigger: 'item', formatter: '{b}: {c} ({d}%)' },
     graphic: total > 0 ? [{
       type: 'text', left: 'center', top: 'center',
-      style: { text: `${total}\n客户总数`, textAlign: 'center', fill: '#001852', fontSize: 16, fontWeight: 700, lineHeight: 20 },
+      style: { text: `${total}\n客户总数`, textAlign: 'center', fill: '#008acd', fontSize: 16, fontWeight: 700, lineHeight: 20 },
     }] : [],
     series: [{
       type: 'pie', radius: ['60%', '82%'], center: ['50%', '50%'],
@@ -232,7 +239,7 @@ function renderSource() {
 // ── 3. 横向柱状图（画像状态） ──
 function renderIcp() {
   if (!icpRef.value) return
-  const c = echarts.init(icpRef.value, 'roma')
+  const c = echarts.init(icpRef.value, 'macarons')
   charts.push(c)
   const s = stats.value
   const items = [
@@ -262,10 +269,10 @@ function renderIcp() {
       backgroundStyle: { color: '#f5f5f5', borderRadius: [0, 8, 8, 0] },
       data: items.map((i, idx) => {
         const cols: [string, string][] = [
-          [R[13], R[17]], // 已完成：forest green → sea green
-          [R[6],  R[18]], // 生成中：gold → dark gold
-          [R[4],  R[8]],  // 草稿：tan → olive
-          [R[0],  R[11]], // 失败：crimson → tomato
+          [R[7],  R[17]], // 已完成：olive green → bright green
+          [R[3],  R[13]], // 生成中：peach → orange
+          [R[5],  R[15]], // 草稿：slate → dark slate
+          [R[4],  R[14]], // 失败：rose → dark red
         ]
         return {
           value: i.value,
@@ -286,7 +293,7 @@ function renderIcp() {
 // ── 4. 漏斗图（邮件转化） ──
 function renderFunnel() {
   if (!funnelRef.value) return
-  const c = echarts.init(funnelRef.value, 'roma')
+  const c = echarts.init(funnelRef.value, 'macarons')
   charts.push(c)
   const s = stats.value
   const data = [
@@ -310,8 +317,8 @@ function renderFunnel() {
         ...d,
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: [R[0],  R[3],  R[9]][i] },
-            { offset: 1, color: [R[16], R[13], R[15]][i] },
+            { offset: 0, color: [R[0],  R[1],  R[4]][i] },
+            { offset: 1, color: [R[10], R[11], R[14]][i] },
           ]),
         },
       })),
@@ -370,16 +377,16 @@ $t3: #8c8c8c;
 .kpi-icon {
   width: 42px; height: 42px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  &--crimson { background: #fde8ed; color: #E01F54; }
-  &--sage    { background: #eef5f1; color: #7ba58f; }
-  &--royal   { background: #e8ecf5; color: #2e4783; }
-  &--gold    { background: #fdf6e5; color: #c9a030; }
+  &--teal     { background: #e6fafb; color: #2ec7c9; }
+  &--lavender { background: #f4f1fb; color: #9a7fd1; }
+  &--pink     { background: #fce8ec; color: #dc69aa; }
+  &--peach    { background: #fff5ed; color: #ffb980; }
 }
 
 .kpi-body { flex: 1; display: flex; flex-direction: column; }
 .kpi-val  { font-size: 24px; font-weight: 700; color: $t1; line-height: 1.2; letter-spacing: -.5px; }
 .kpi-lbl  { font-size: 11px; color: $t3; margin-bottom: 2px; }
-.kpi-trend { font-size: 11px; color: #0a915d; }
+.kpi-trend { font-size: 11px; color: #07a2a4; }
 
 .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 
