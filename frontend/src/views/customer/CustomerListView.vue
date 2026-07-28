@@ -2,14 +2,14 @@
   <div class="customer-list-page">
     <PageHeader title="客户管理">
       <template #actions>
+        <el-button class="btn-ai-acquisition" @click="openSearchDialog">
+          <el-icon><MagicStick /></el-icon>AI 全渠道获客
+        </el-button>
         <el-button type="primary" @click="openCreateDialog()">
           <el-icon><Plus /></el-icon>添加客户
         </el-button>
         <el-button @click="openImportDialog">
           <el-icon><Upload /></el-icon>导入 Excel
-        </el-button>
-        <el-button class="btn-ai-acquisition" @click="openSearchDialog">
-          <el-icon><MagicStick /></el-icon>AI 全渠道获客
         </el-button>
         <el-button @click="handleExport">
           <el-icon><Download /></el-icon>导出 Excel
