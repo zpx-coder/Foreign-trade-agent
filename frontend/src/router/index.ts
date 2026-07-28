@@ -43,11 +43,6 @@ const appRoutes: RouteRecordRaw = {
       component: () => import("@/views/dashboard/DashboardView.vue"),
     },
     {
-      path: "dashboard-preview",
-      name: "DashboardPreview",
-      component: () => import("@/views/dashboard/DashboardPreview.vue"),
-    },
-    {
       path: "enterprise",
       name: "Enterprise",
       component: () => import("@/views/enterprise/EnterpriseEdit.vue"),
