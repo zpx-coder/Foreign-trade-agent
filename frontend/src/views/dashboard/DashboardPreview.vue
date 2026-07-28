@@ -2,32 +2,32 @@
   <div class="dv-page">
     <!-- ═══ KPI 指标卡 ═══ -->
     <div class="kpi-row">
-      <div class="kpi-card kpi--blue">
-        <div class="kpi-icon"><el-icon :size="18"><UserFilled /></el-icon></div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon--rose"><el-icon :size="18"><UserFilled /></el-icon></div>
         <div class="kpi-body">
           <span class="kpi-val">{{ stats.total_customers || 0 }}</span>
           <span class="kpi-lbl">获取客户</span>
-          <span class="kpi-trend up" v-if="stats.customers_reached">{{ stats.customers_reached }} 已触达</span>
+          <span class="kpi-trend" v-if="stats.customers_reached">{{ stats.customers_reached }} 已触达</span>
         </div>
       </div>
-      <div class="kpi-card kpi--green">
-        <div class="kpi-icon"><el-icon :size="18"><PictureFilled /></el-icon></div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon--sage"><el-icon :size="18"><PictureFilled /></el-icon></div>
         <div class="kpi-body">
           <span class="kpi-val">{{ stats.completed_icps || 0 }}</span>
           <span class="kpi-lbl">客户画像</span>
           <span class="kpi-trend" v-if="stats.total_icps">共 {{ stats.total_icps }} 个</span>
         </div>
       </div>
-      <div class="kpi-card kpi--purple">
-        <div class="kpi-icon"><el-icon :size="18"><Message /></el-icon></div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon--teal"><el-icon :size="18"><Message /></el-icon></div>
         <div class="kpi-body">
           <span class="kpi-val">{{ stats.total_emails_sent || 0 }}</span>
           <span class="kpi-lbl">已发邮件</span>
           <span class="kpi-trend" v-if="stats.total_emails_sent">回复率 {{ (stats.reply_rate * 100).toFixed(0) }}%</span>
         </div>
       </div>
-      <div class="kpi-card kpi--amber">
-        <div class="kpi-icon"><el-icon :size="18"><TrendCharts /></el-icon></div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon--tan"><el-icon :size="18"><TrendCharts /></el-icon></div>
         <div class="kpi-body">
           <span class="kpi-val">{{ stats.total_customers ? (stats.reach_rate * 100).toFixed(0) + '%' : '—' }}</span>
           <span class="kpi-lbl">触达率</span>
@@ -37,21 +37,21 @@
 
     <!-- ═══ 图表区 ═══ -->
     <div class="chart-row">
-      <!-- 邮件发送趋势 — 渐变面积图 -->
+      <!-- 邮件发送趋势 -->
       <div class="chart-card">
         <div class="chart-card__head">
           <h3 class="chart-card__title">邮件发送趋势</h3>
           <span class="chart-card__sub">近 30 天</span>
         </div>
         <div class="chart-legend">
-          <span class="legend-item"><i style="background:#818cf8;"></i>已发送</span>
-          <span class="legend-item"><i style="background:#34d399;"></i>已打开</span>
-          <span class="legend-item"><i style="background:#fbbf24;"></i>已回复</span>
+          <span class="legend-item"><i style="background:#d87c7c;"></i>已发送</span>
+          <span class="legend-item"><i style="background:#919e8b;"></i>已打开</span>
+          <span class="legend-item"><i style="background:#61a0a8;"></i>已回复</span>
         </div>
         <div ref="emailRef" class="chart-body"></div>
       </div>
 
-      <!-- 客户来源 — 科技感环形图 -->
+      <!-- 客户来源 -->
       <div class="chart-card">
         <div class="chart-card__head">
           <h3 class="chart-card__title">客户来源分布</h3>
@@ -61,7 +61,7 @@
     </div>
 
     <div class="chart-row">
-      <!-- 画像状态 — 渐变柱状图 -->
+      <!-- 画像状态 -->
       <div class="chart-card">
         <div class="chart-card__head">
           <h3 class="chart-card__title">画像状态分布</h3>
@@ -91,6 +91,16 @@ import { CanvasRenderer } from 'echarts/renderers'
 
 echarts.use([LineChart, PieChart, BarChart, FunnelChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
+// ── 注册 Vintage 主题 ──
+const VINTAGE_PALETTE = ['#d87c7c', '#919e8b', '#d7ab82', '#6e7074', '#61a0a8', '#efa18d', '#787464', '#cc7e63', '#724e58', '#4b565b']
+echarts.registerTheme('vintage', {
+  color: VINTAGE_PALETTE,
+  backgroundColor: '#fef8ef',
+  graph: { color: VINTAGE_PALETTE },
+})
+
+const VC = VINTAGE_PALETTE // alias
+
 interface DashboardStats {
   total_icps: number; completed_icps: number; generating_icps: number
   draft_icps: number; failed_icps: number
@@ -107,24 +117,22 @@ const stats = ref<DashboardStats>({
   daily_email_stats: [],
 })
 
-// ── 图表 refs ──
 const emailRef = ref<HTMLDivElement>()
 const sourceRef = ref<HTMLDivElement>()
 const icpRef = ref<HTMLDivElement>()
 const funnelRef = ref<HTMLDivElement>()
 let charts: echarts.ECharts[] = []
 
-// ── 通用配置 ──
-const TEXT_DIM = '#94a3b8'
-const GRID_LINE = '#f1f5f9'
+const TEXT_DIM = '#9c8f80'
+const GRID_LINE = '#ede3d3'
 
 function makeTooltip(): any {
   return {
-    backgroundColor: '#fff',
-    borderColor: '#e8ecf1',
+    backgroundColor: '#fffef9',
+    borderColor: '#d7cfc4',
     borderWidth: 1,
-    textStyle: { color: '#334155', fontSize: 12 },
-    boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+    textStyle: { color: '#4b565b', fontSize: 12 },
+    boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
     extraCssText: 'border-radius:10px;padding:10px 14px;',
   }
 }
@@ -132,7 +140,7 @@ function makeTooltip(): any {
 // ── 1. 渐变面积图（邮件趋势） ──
 function renderEmail() {
   if (!emailRef.value) return
-  const c = echarts.init(emailRef.value)
+  const c = echarts.init(emailRef.value, 'vintage')
   charts.push(c)
   const data = stats.value.daily_email_stats
   const days = data.map(d => d.day.slice(5))
@@ -159,33 +167,33 @@ function renderEmail() {
       {
         name: '已发送', type: 'line', data: sent,
         smooth: true, symbol: 'none',
-        lineStyle: { color: '#818cf8', width: 2.5 },
+        lineStyle: { color: VC[0], width: 2.5 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(129,140,248,0.15)' },
-            { offset: 1, color: 'rgba(129,140,248,0.0)' },
+            { offset: 0, color: 'rgba(216,124,124,0.18)' },
+            { offset: 1, color: 'rgba(216,124,124,0.0)' },
           ]),
         },
       },
       {
         name: '已打开', type: 'line', data: opened,
         smooth: true, symbol: 'none',
-        lineStyle: { color: '#34d399', width: 2.5 },
+        lineStyle: { color: VC[1], width: 2.5 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(52,211,153,0.12)' },
-            { offset: 1, color: 'rgba(52,211,153,0.0)' },
+            { offset: 0, color: 'rgba(145,158,139,0.16)' },
+            { offset: 1, color: 'rgba(145,158,139,0.0)' },
           ]),
         },
       },
       {
         name: '已回复', type: 'line', data: replied,
         smooth: true, symbol: 'none',
-        lineStyle: { color: '#fbbf24', width: 2, type: 'dashed' },
+        lineStyle: { color: VC[4], width: 2, type: 'dashed' },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(251,191,36,0.10)' },
-            { offset: 1, color: 'rgba(251,191,36,0.0)' },
+            { offset: 0, color: 'rgba(97,160,168,0.14)' },
+            { offset: 1, color: 'rgba(97,160,168,0.0)' },
           ]),
         },
       },
@@ -193,29 +201,23 @@ function renderEmail() {
   })
 }
 
-// ── 2. 科技感环形图（客户来源） ──
+// ── 2. 环形图（客户来源） ──
 function renderSource() {
   if (!sourceRef.value) return
-  const c = echarts.init(sourceRef.value)
+  const c = echarts.init(sourceRef.value, 'vintage')
   charts.push(c)
   const data = stats.value.customer_sources
-  const palette = ['#818cf8', '#34d399', '#fbbf24', '#60a5fa', '#f472b6', '#a78bfa', '#94a3b8']
-
   const total = data.reduce((s, d) => s + d.value, 0)
   const seriesData = data.length > 0
     ? data.map((d, i) => ({
         ...d,
         itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 1, [
-            { offset: 0, color: palette[i % palette.length] },
-            { offset: 1, color: palette[(i + 1) % palette.length] },
-          ]),
-          borderRadius: 8,
-          borderColor: '#fff',
+          borderRadius: 6,
+          borderColor: '#fef8ef',
           borderWidth: 3,
         },
       }))
-    : [{ value: 1, name: '暂无', itemStyle: { color: '#e8ecf1' }, tooltip: { show: false } }]
+    : [{ value: 1, name: '暂无', itemStyle: { color: '#e0d8cc' }, tooltip: { show: false } }]
 
   c.setOption({
     tooltip: { ...makeTooltip(), trigger: 'item', formatter: '{b}: {c} ({d}%)' },
@@ -225,7 +227,7 @@ function renderSource() {
       style: {
         text: `${total}\n客户总数`,
         textAlign: 'center',
-        fill: '#0f172a',
+        fill: '#4b565b',
         fontSize: 16, fontWeight: 700, lineHeight: 20,
       },
     }] : [],
@@ -244,17 +246,17 @@ function renderSource() {
   })
 }
 
-// ── 3. 渐变横向柱状图（画像状态） ──
+// ── 3. 横向柱状图（画像状态） ──
 function renderIcp() {
   if (!icpRef.value) return
-  const c = echarts.init(icpRef.value)
+  const c = echarts.init(icpRef.value, 'vintage')
   charts.push(c)
   const s = stats.value
   const items = [
-    { label: '已完成',   value: s.completed_icps  || 0, color: ['#34d399', '#6ee7b7'] },
-    { label: '生成中',   value: s.generating_icps || 0, color: ['#fbbf24', '#fcd34d'] },
-    { label: '草稿',     value: s.draft_icps      || 0, color: ['#94a3b8', '#cbd5e1'] },
-    { label: '失败',     value: s.failed_icps     || 0, color: ['#f87171', '#fca5a5'] },
+    { label: '已完成', value: s.completed_icps  || 0 },
+    { label: '生成中', value: s.generating_icps || 0 },
+    { label: '草稿',   value: s.draft_icps      || 0 },
+    { label: '失败',   value: s.failed_icps     || 0 },
   ]
 
   c.setOption({
@@ -269,24 +271,32 @@ function renderIcp() {
     yAxis: {
       type: 'category', data: items.map(i => i.label),
       axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: '#475569', fontSize: 12, fontWeight: 500 },
+      axisLabel: { color: '#5a5248', fontSize: 12, fontWeight: 500 },
     },
     series: [{
       type: 'bar',
       barWidth: 16,
       showBackground: true,
-      backgroundStyle: { color: '#f8fafc', borderRadius: [0, 8, 8, 0] },
-      data: items.map((i, idx) => ({
-        value: i.value,
-        itemStyle: {
-          borderRadius: [0, 8, 8, 0],
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: i.color[0] },
-            { offset: 1, color: i.color[1] },
-          ]),
-        },
-      })),
-      label: { show: true, position: 'right', color: '#334155', fontSize: 12, fontWeight: 600 },
+      backgroundStyle: { color: '#f5efe4', borderRadius: [0, 8, 8, 0] },
+      data: items.map((i, idx) => {
+        const cols = [
+          [VC[0], VC[5]], // 已完成：rose → salmon
+          [VC[4], VC[8]], // 生成中：teal → dusty rose
+          [VC[3], VC[6]], // 草稿：gray → olive brown
+          [VC[7], '#724e58'], // 失败：terracotta → deep rose
+        ]
+        return {
+          value: i.value,
+          itemStyle: {
+            borderRadius: [0, 8, 8, 0],
+            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: cols[idx][0] },
+              { offset: 1, color: cols[idx][1] },
+            ]),
+          },
+        }
+      }),
+      label: { show: true, position: 'right', color: '#4b565b', fontSize: 12, fontWeight: 600 },
     }],
   })
 }
@@ -294,7 +304,7 @@ function renderIcp() {
 // ── 4. 漏斗图（邮件转化） ──
 function renderFunnel() {
   if (!funnelRef.value) return
-  const c = echarts.init(funnelRef.value)
+  const c = echarts.init(funnelRef.value, 'vintage')
   charts.push(c)
   const s = stats.value
   const data = [
@@ -320,7 +330,7 @@ function renderFunnel() {
       },
       labelLine: { show: false },
       itemStyle: {
-        borderColor: '#fff',
+        borderColor: '#fef8ef',
         borderWidth: 0,
         borderRadius: 4,
       },
@@ -329,8 +339,8 @@ function renderFunnel() {
         ...d,
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: ['#818cf8', '#34d399', '#fbbf24'][i] },
-            { offset: 1, color: ['#6366f1', '#10b981', '#f59e0b'][i] },
+            { offset: 0, color: [VC[0], VC[1], VC[4]][i] },
+            { offset: 1, color: [VC[5], VC[8], '#4b8f99'][i] },
           ]),
         },
       })),
@@ -338,14 +348,13 @@ function renderFunnel() {
   })
 }
 
-// ── 渲染所有 ──
+// ── 渲染 ──
 function renderAll() {
   nextTick(() => {
     charts.forEach(c => c.dispose()); charts = []
     renderEmail(); renderSource(); renderIcp(); renderFunnel()
   })
 }
-
 function handleResize() { charts.forEach(c => c.resize()) }
 
 async function loadStats() {
@@ -367,14 +376,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-$bg:     #f8f9fb;
-$card:   #fff;
-$border: #eaecef;
+// ═══ Vintage 暖色调 ═══
+$bg:     #fef8ef;
+$card:   #fffef9;
+$border: #e0d8cc;
 $radius: 16px;
 $shadow: 0 1px 3px rgba(0,0,0,.04);
-$t1: #0f172a;
-$t2: #475569;
-$t3: #94a3b8;
+$t1: #3e3830;
+$t2: #6b5f52;
+$t3: #9c8f80;
 
 .dv-page { max-width: 1050px; margin: 0 auto; }
 
@@ -392,16 +402,16 @@ $t3: #94a3b8;
 .kpi-icon {
   width: 42px; height: 42px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  &--rose { background: #f8ecec; color: #d87c7c; }
+  &--sage { background: #eaede7; color: #788a71; }
+  &--teal { background: #e6f0f1; color: #61a0a8; }
+  &--tan  { background: #f7efe4; color: #c49a6c; }
 }
-.kpi--blue   .kpi-icon { background: linear-gradient(135deg, #eef2ff, #e0e7ff); color: #6366f1; }
-.kpi--green  .kpi-icon { background: linear-gradient(135deg, #ecfdf5, #d1fae5); color: #10b981; }
-.kpi--purple .kpi-icon { background: linear-gradient(135deg, #f5f3ff, #ede9fe); color: #7c3aed; }
-.kpi--amber  .kpi-icon { background: linear-gradient(135deg, #fffbeb, #fef3c7); color: #f59e0b; }
 
 .kpi-body { flex: 1; display: flex; flex-direction: column; }
 .kpi-val  { font-size: 24px; font-weight: 700; color: $t1; line-height: 1.2; letter-spacing: -.5px; }
 .kpi-lbl  { font-size: 11px; color: $t3; margin-bottom: 2px; }
-.kpi-trend { font-size: 11px; color: #10b981; &.up { color: #10b981; } }
+.kpi-trend { font-size: 11px; color: #788a71; }
 
 // ── 图表行 ──
 .chart-row {
@@ -435,7 +445,5 @@ $t3: #94a3b8;
 .chart-body { width: 100%; height: 240px; }
 .chart-body--donut { height: 280px; }
 .chart-body--bar   { height: 200px; }
-
-// ── 漏斗图 ──
 .chart-body--funnel { height: 280px; }
 </style>
