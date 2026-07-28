@@ -236,56 +236,59 @@ function renderSource() {
   })
 }
 
-// ── 3. 横向柱状图（画像状态） ──
+// ── 3. 环形图（画像状态） ──
 function renderIcp() {
   if (!icpRef.value) return
   const c = echarts.init(icpRef.value, 'macarons')
   charts.push(c)
   const s = stats.value
-  const items = [
-    { label: '已完成', value: s.completed_icps  || 0 },
-    { label: '生成中', value: s.generating_icps || 0 },
-    { label: '草稿',   value: s.draft_icps      || 0 },
-    { label: '失败',   value: s.failed_icps     || 0 },
+  const total = s.total_icps || 0
+  const data = [
+    { value: s.completed_icps  || 0, name: '已完成' },
+    { value: s.generating_icps || 0, name: '生成中' },
+    { value: s.draft_icps      || 0, name: '草稿' },
+    { value: s.failed_icps     || 0, name: '失败' },
   ]
 
   c.setOption({
-    tooltip: { ...makeTooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: 0, right: 20, top: 8, bottom: 0, containLabel: true },
-    xAxis: {
-      type: 'value',
-      axisLine: { show: false }, axisTick: { show: false },
-      splitLine: { lineStyle: { color: GRID_LINE, type: 'dashed' } },
-      axisLabel: { color: TEXT_DIM, fontSize: 10 },
+    tooltip: { ...makeTooltip(), trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: {
+      orient: 'vertical', right: 10, top: 'center',
+      icon: 'circle', itemWidth: 8, itemHeight: 8, itemGap: 12,
+      textStyle: { color: '#555', fontSize: 12 },
     },
-    yAxis: {
-      type: 'category', data: items.map(i => i.label),
-      axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: '#555', fontSize: 12, fontWeight: 500 },
-    },
+    graphic: total > 0 ? [{
+      type: 'text', left: 'center', top: '42%',
+      style: { text: `${total}\n画像总数`, textAlign: 'center', fill: '#008acd', fontSize: 15, fontWeight: 700, lineHeight: 20 },
+    }] : [],
     series: [{
-      type: 'bar', barWidth: 16,
-      showBackground: true,
-      backgroundStyle: { color: '#f5f5f5', borderRadius: [0, 8, 8, 0] },
-      data: items.map((i, idx) => {
-        const cols: [string, string][] = [
-          [R[7],  R[17]], // 已完成：olive green → bright green
-          [R[3],  R[13]], // 生成中：peach → orange
-          [R[5],  R[15]], // 草稿：slate → dark slate
-          [R[4],  R[14]], // 失败：rose → dark red
-        ]
-        return {
-          value: i.value,
-          itemStyle: {
-            borderRadius: [0, 8, 8, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: cols[idx][0] },
-              { offset: 1, color: cols[idx][1] },
-            ]),
-          },
-        }
-      }),
-      label: { show: true, position: 'right', color: '#333', fontSize: 12, fontWeight: 600 },
+      type: 'pie',
+      radius: ['50%', '72%'],
+      center: ['38%', '50%'],
+      avoidLabelOverlap: false,
+      label: { show: false },
+      emphasis: { scaleSize: 6, label: { show: true, fontSize: 13, fontWeight: 'bold' } },
+      data: data.length > 0 && total > 0
+        ? data.map((d, i) => {
+            const cols: [string, string][] = [
+              [R[7],  R[17]], // 已完成：olive → green
+              [R[3],  R[13]], // 生成中：peach → orange
+              [R[5],  R[15]], // 草稿：slate → dark slate
+              [R[4],  R[14]], // 失败：rose → dark red
+            ]
+            return {
+              ...d,
+              itemStyle: {
+                borderRadius: 6,
+                borderColor: '#fff', borderWidth: 3,
+                color: new echarts.graphic.LinearGradient(0, 0, 1, 1, [
+                  { offset: 0, color: cols[i][0] },
+                  { offset: 1, color: cols[i][1] },
+                ]),
+              },
+            }
+          })
+        : [{ value: 1, name: '暂无', itemStyle: { color: '#eee' }, tooltip: { show: false } }],
     }],
   })
 }
@@ -432,6 +435,6 @@ $t3: #8c8c8c;
 
 .chart-body { width: 100%; height: 240px; }
 .chart-body--donut  { height: 280px; }
-.chart-body--bar    { height: 200px; }
+.chart-body--bar    { height: 260px; }
 .chart-body--funnel { height: 320px; }
 </style>
