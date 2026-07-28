@@ -69,42 +69,27 @@
         <div ref="icpRef" class="chart-body chart-body--bar"></div>
       </div>
 
-      <!-- 邮件转化 — 仪表盘 + 进度 -->
-      <div class="chart-card chart-card--gauge">
+      <!-- 邮件转化漏斗 -->
+      <div class="chart-card">
         <div class="chart-card__head">
           <h3 class="chart-card__title">邮件转化漏斗</h3>
         </div>
-        <div class="gauge-section">
-          <!-- 回复率仪表盘 -->
-          <div class="gauge-wrap">
-            <div ref="gaugeRef" class="gauge-chart"></div>
-          </div>
-          <!-- 转化步骤 -->
-          <div class="funnel-mini">
-            <div class="funnel-step" v-for="s in funnelSteps" :key="s.label">
-              <div class="funnel-step__info">
-                <span class="funnel-step__dot" :style="{ background: s.color }"></span>
-                <span class="funnel-step__label">{{ s.label }}</span>
-              </div>
-              <span class="funnel-step__val">{{ s.value }}</span>
-            </div>
-          </div>
-        </div>
+        <div ref="funnelRef" class="chart-body chart-body--funnel"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { UserFilled, PictureFilled, Message, TrendCharts } from '@element-plus/icons-vue'
 import api from '@/api/client'
 import * as echarts from 'echarts/core'
-import { LineChart, PieChart, BarChart, GaugeChart } from 'echarts/charts'
+import { LineChart, PieChart, BarChart, FunnelChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
-echarts.use([LineChart, PieChart, BarChart, GaugeChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+echarts.use([LineChart, PieChart, BarChart, FunnelChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 interface DashboardStats {
   total_icps: number; completed_icps: number; generating_icps: number
@@ -122,21 +107,11 @@ const stats = ref<DashboardStats>({
   daily_email_stats: [],
 })
 
-// ── 漏斗步骤 ──
-const funnelSteps = computed(() => {
-  const s = stats.value
-  return [
-    { label: '已发送', value: s.total_emails_sent || 0, color: '#818cf8' },
-    { label: '已打开', value: s.total_emails_opened || 0, color: '#34d399' },
-    { label: '已回复', value: s.total_emails_replied || 0, color: '#fbbf24' },
-  ]
-})
-
 // ── 图表 refs ──
 const emailRef = ref<HTMLDivElement>()
 const sourceRef = ref<HTMLDivElement>()
 const icpRef = ref<HTMLDivElement>()
-const gaugeRef = ref<HTMLDivElement>()
+const funnelRef = ref<HTMLDivElement>()
 let charts: echarts.ECharts[] = []
 
 // ── 通用配置 ──
@@ -316,63 +291,49 @@ function renderIcp() {
   })
 }
 
-// ── 4. 仪表盘（回复率） ──
-function renderGauge() {
-  if (!gaugeRef.value) return
-  const c = echarts.init(gaugeRef.value)
+// ── 4. 漏斗图（邮件转化） ──
+function renderFunnel() {
+  if (!funnelRef.value) return
+  const c = echarts.init(funnelRef.value)
   charts.push(c)
-  const rate = stats.value.total_emails_sent > 0
-    ? Math.round(stats.value.reply_rate * 100)
-    : 0
+  const s = stats.value
+  const data = [
+    { value: s.total_emails_sent   || 0, name: '已发送' },
+    { value: s.total_emails_opened || 0, name: '已打开' },
+    { value: s.total_emails_replied || 0, name: '已回复' },
+  ]
 
   c.setOption({
+    tooltip: { ...makeTooltip(), trigger: 'item', formatter: '{b}: {c}' },
     series: [{
-      type: 'gauge',
-      startAngle: 210,
-      endAngle: -30,
-      center: ['50%', '55%'],
-      radius: '90%',
-      min: 0, max: 100,
-      splitNumber: 10,
-      axisLine: {
+      type: 'funnel',
+      left: '10%', right: '10%', top: 20, bottom: 10,
+      min: 0,
+      max: data[0]?.value || 100,
+      sort: 'descending',
+      gap: 2,
+      label: {
         show: true,
-        lineStyle: {
-          width: 14,
-          color: [
-            [0.3, new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: '#34d399' }, { offset: 1, color: '#6ee7b7' },
-            ])],
-            [0.6, new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: '#fbbf24' }, { offset: 1, color: '#fcd34d' },
-            ])],
-            [1, new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: '#f87171' }, { offset: 1, color: '#fca5a5' },
-            ])],
-          ],
+        position: 'inside',
+        formatter: '{b}  {c}',
+        fontSize: 13, fontWeight: 600, color: '#fff',
+      },
+      labelLine: { show: false },
+      itemStyle: {
+        borderColor: '#fff',
+        borderWidth: 0,
+        borderRadius: 4,
+      },
+      emphasis: { label: { fontSize: 16 } },
+      data: data.map((d, i) => ({
+        ...d,
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+            { offset: 0, color: ['#818cf8', '#34d399', '#fbbf24'][i] },
+            { offset: 1, color: ['#6366f1', '#10b981', '#f59e0b'][i] },
+          ]),
         },
-      },
-      pointer: {
-        icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z',
-        length: '70%', width: 6,
-        offsetCenter: [0, '-10%'],
-        itemStyle: { color: 'auto' },
-      },
-      axisTick: { distance: -14, length: 6, lineStyle: { width: 1, color: '#94a3b8' } },
-      splitLine: { distance: -17, length: 14, lineStyle: { width: 2, color: '#94a3b8' } },
-      axisLabel: { color: TEXT_DIM, fontSize: 10, distance: 24 },
-      detail: {
-        valueAnimation: true,
-        formatter: '{value}%',
-        color: '#0f172a',
-        fontSize: 28, fontWeight: 700,
-        offsetCenter: [0, '60%'],
-      },
-      title: {
-        offsetCenter: [0, '82%'],
-        color: TEXT_DIM,
-        fontSize: 13,
-      },
-      data: [{ value: rate, name: '邮件回复率' }],
+      })),
     }],
   })
 }
@@ -381,7 +342,7 @@ function renderGauge() {
 function renderAll() {
   nextTick(() => {
     charts.forEach(c => c.dispose()); charts = []
-    renderEmail(); renderSource(); renderIcp(); renderGauge()
+    renderEmail(); renderSource(); renderIcp(); renderFunnel()
   })
 }
 
@@ -475,23 +436,6 @@ $t3: #94a3b8;
 .chart-body--donut { height: 280px; }
 .chart-body--bar   { height: 200px; }
 
-// ── 仪表盘 + 漏斗 ──
-.gauge-section {
-  display: flex; align-items: center; gap: 20px;
-  padding-top: 4px;
-}
-.gauge-wrap { flex: 1; }
-.gauge-chart { width: 100%; height: 200px; }
-
-.funnel-mini {
-  display: flex; flex-direction: column; gap: 14px;
-  flex-shrink: 0; min-width: 100px;
-}
-.funnel-step {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  &__info { display: flex; align-items: center; gap: 6px; }
-  &__dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  &__label { font-size: 12px; color: $t2; }
-  &__val { font-size: 16px; font-weight: 700; color: $t1; font-variant-numeric: tabular-nums; }
-}
+// ── 漏斗图 ──
+.chart-body--funnel { height: 280px; }
 </style>
