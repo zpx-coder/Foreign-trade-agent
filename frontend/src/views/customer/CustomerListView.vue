@@ -8,8 +8,8 @@
         <el-button @click="openImportDialog">
           <el-icon><Upload /></el-icon>导入 Excel
         </el-button>
-        <el-button type="success" @click="openSearchDialog">
-          <el-icon><Search /></el-icon>搜索客户
+        <el-button class="btn-ai-acquisition" @click="openSearchDialog">
+          <el-icon><MagicStick /></el-icon>AI 全渠道获客
         </el-button>
         <el-button @click="handleExport">
           <el-icon><Download /></el-icon>导出 Excel
@@ -569,7 +569,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import type { FormInstance, FormRules } from "element-plus";
-import { Plus, Search, Download, UserFilled, Upload, Clock, ArrowDown, Loading, CircleCheckFilled, CircleCloseFilled } from "@element-plus/icons-vue";
+import { Plus, Download, UserFilled, Upload, Clock, ArrowDown, Loading, CircleCheckFilled, CircleCloseFilled, MagicStick } from "@element-plus/icons-vue";
 import PageHeader from "@/components/common/PageHeader.vue";
 import LoadingSkeleton from "@/components/common/LoadingSkeleton.vue";
 import EmptyState from "@/components/common/EmptyState.vue";
@@ -1295,6 +1295,25 @@ onUnmounted(() => { stopPolling(); });
         .import-errors-title { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #dc2626; }
         ul { margin: 0; padding-left: 20px; font-size: 13px; color: #7f1d1d; line-height: 1.8; }
       }
+    }
+  }
+
+  // ── AI 全渠道获客按钮（突出样式）──
+  .btn-ai-acquisition {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border: none !important;
+    color: #fff !important;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+    transition: all 0.3s ease;
+    &:hover {
+      background: linear-gradient(135deg, #7c93f0 0%, #8b5fbe 100%) !important;
+      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.5);
+      transform: translateY(-1px);
+    }
+    &:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 4px rgba(102, 126, 234, 0.3);
     }
   }
 }
