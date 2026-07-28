@@ -296,32 +296,56 @@ function renderFunnel() {
   const c = echarts.init(funnelRef.value, 'macarons')
   charts.push(c)
   const s = stats.value
-  const data = [
-    { value: s.total_emails_sent   || 0, name: '已发送' },
-    { value: s.total_emails_opened || 0, name: '已打开' },
-    { value: s.total_emails_replied || 0, name: '已回复' },
-  ]
+  const sent   = s.total_emails_sent   || 0
+  const opened = s.total_emails_opened || 0
+  const replied = s.total_emails_replied || 0
+  const max = sent || 100
 
   c.setOption({
     tooltip: { ...makeTooltip(), trigger: 'item', formatter: '{b}: {c}' },
     series: [{
       type: 'funnel',
-      left: '10%', right: '10%', top: 20, bottom: 10,
-      min: 0, max: data[0]?.value || 100,
-      sort: 'descending', gap: 2,
-      label: { show: true, position: 'inside', formatter: '{b}  {c}', fontSize: 13, fontWeight: 600, color: '#fff' },
+      left: '15%', right: '15%', top: 60, bottom: 60,
+      width: '70%',
+      max, min: 0,
+      sort: 'descending', gap: 4,
+      funnelAlign: 'center',
+      label: {
+        show: true, position: 'inside',
+        formatter: (p: any) => `${p.name}  ${p.value}`,
+        fontSize: 13, fontWeight: 600, color: '#fff',
+      },
       labelLine: { show: false },
-      itemStyle: { borderColor: '#fff', borderWidth: 0, borderRadius: 4 },
+      itemStyle: { borderColor: '#fff', borderWidth: 0 },
       emphasis: { label: { fontSize: 16 } },
-      data: data.map((d, i) => ({
-        ...d,
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: [R[0],  R[1],  R[4]][i] },
-            { offset: 1, color: [R[10], R[11], R[14]][i] },
-          ]),
+      data: [
+        {
+          value: sent, name: '已发送',
+          itemStyle: {
+            borderRadius: [8, 8, 0, 0],
+            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: R[0] }, { offset: 1, color: R[10] },
+            ]),
+          },
         },
-      })),
+        {
+          value: opened, name: '已打开',
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: R[1] }, { offset: 1, color: R[11] },
+            ]),
+          },
+        },
+        {
+          value: replied, name: '已回复',
+          itemStyle: {
+            borderRadius: [0, 0, 8, 8],
+            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: R[4] }, { offset: 1, color: R[14] },
+            ]),
+          },
+        },
+      ],
     }],
   })
 }
@@ -409,5 +433,5 @@ $t3: #8c8c8c;
 .chart-body { width: 100%; height: 240px; }
 .chart-body--donut  { height: 280px; }
 .chart-body--bar    { height: 200px; }
-.chart-body--funnel { height: 280px; }
+.chart-body--funnel { height: 320px; }
 </style>
