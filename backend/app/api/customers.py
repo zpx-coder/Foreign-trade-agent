@@ -26,6 +26,7 @@ from app.models.user import User
 from app.models.icp import Icp
 from app.models.customer import Customer
 from app.models.contact import Contact
+from app.models.enterprise import EnterpriseProfile
 from app.schemas.customer import (
     ContactCreateRequest,
     ContactUpdateRequest,
@@ -664,6 +665,33 @@ _CHANNELS_MAP = {
 }
 
 
+def _build_enterprise_search_context(enterprise: EnterpriseProfile) -> str:
+    """v1.6: 从企业资料构建搜索用的企业背景文本，供 AI 渠道匹配客户。"""
+    lines: list[str] = []
+
+    def _add(label: str, value):
+        if value is not None and value != "" and value != []:
+            if isinstance(value, list):
+                value = "、".join(str(v) for v in value)
+            lines.append(f"- {label}：{value}")
+
+    _add("我方行业", enterprise.industry)
+    _add("企业简介", enterprise.description)
+    _add("成立年份", enterprise.year_established)
+    _add("员工人数", enterprise.employee_count)
+    _add("工厂面积", enterprise.factory_area)
+    _add("年出口额", enterprise.annual_export_volume)
+    _add("主要出口市场", enterprise.main_markets)
+    _add("认证资质", enterprise.certifications)
+    _add("OEM/ODM 能力", enterprise.oem_odm)
+    _add("核心优势", enterprise.company_advantages)
+
+    if not lines:
+        return ""
+
+    return "\n".join(lines)
+
+
 async def _execute_search(
     tenant_id: _uuid.UUID,
     user_id: _uuid.UUID,
@@ -684,6 +712,32 @@ async def _execute_search(
         icp_data.get("product_category", ""),
     ])) or icp_name
 
+    # v1.6: 用企业资料丰富搜索策略
+    enterprise = None
+    enterprise_context = ""
+    try:
+        async with AsyncSessionLocal() as ent_session:
+            ent_result = await ent_session.execute(
+                select(EnterpriseProfile).where(EnterpriseProfile.tenant_id == tenant_id)
+            )
+            enterprise = ent_result.scalar_one_or_none()
+            if enterprise:
+                enterprise_context = _build_enterprise_search_context(enterprise)
+    except Exception:
+        logger.warning("Failed to fetch enterprise profile for search enrichment", exc_info=True)
+
+    # 用企业行业+买方关键词丰富搜索 query（对所有渠道生效）
+    if enterprise and enterprise.industry:
+        buyer_suffix = " importer distributor buyer"
+        if enterprise.industry not in query:
+            query = f"{query} {enterprise.industry}{buyer_suffix}"
+
+    # 如果 ICP 未指定区域，用企业主要市场作为补充
+    if not region and enterprise and enterprise.main_markets:
+        markets = enterprise.main_markets
+        if isinstance(markets, list) and len(markets) > 0:
+            region = markets[0]  # 取第一个市场作为默认区域
+
     # Step 1: 各渠道搜索（并行）
     await on_progress({"type": "section", "section": "searching"})
     all_results: List[SearchResult] = []
@@ -693,7 +747,11 @@ async def _execute_search(
         try:
             await on_progress({"type": "progress", "channel": channel_name, "message": f"正在 {channel_name} 搜索..."})
             channel = channel_cls()
-            results = await channel.search(query, region, max_results=_MAX_SEARCH_RESULTS)
+            # v1.6: AI 渠道额外传入企业背景，提升匹配精准度
+            extra_kwargs = {}
+            if channel_name == "ai" and enterprise_context:
+                extra_kwargs["enterprise_context"] = enterprise_context
+            results = await channel.search(query, region, max_results=_MAX_SEARCH_RESULTS, **extra_kwargs)
             await on_progress({"type": "progress", "channel": channel_name, "found": len(results), "message": f"{channel_name} 找到 {len(results)} 条"})
             return channel_name, results, None
         except Exception as e:
@@ -725,6 +783,7 @@ async def _execute_search(
     await on_progress({"type": "section", "section": "saving"})
     ai_service = get_ai_service()
     saved_count = 0
+    contacts_from_extraction = 0  # v1.6: Step 3 中 AI 提取到联系人的公司数
     saved_customers: list = []  # [(customer_id, website), ...]
 
     _extract_semaphore = asyncio.Semaphore(5)
@@ -732,7 +791,7 @@ async def _execute_search(
 
     async def _extract_and_save(result: SearchResult) -> tuple:
         """单个结果的提取+保存任务。返回 (status, customer_id, website) 或 (status, None, None)"""
-        nonlocal saved_count, saved_customers
+        nonlocal saved_count, saved_customers, contacts_from_extraction
 
         async with _extract_semaphore:
             try:
@@ -785,6 +844,9 @@ async def _execute_search(
                                     contact_type="ai_suggested",
                                     confidence=c_data.get("confidence", "inferred"),
                                 ))
+                        if result.contacts and any(c.get("name") for c in result.contacts):
+                            async with _saved_lock:
+                                contacts_from_extraction += 1
 
                         await sess.commit()
                         async with _saved_lock:
@@ -864,7 +926,8 @@ async def _execute_search(
                             sess.add(customer)
                             await sess.flush()
 
-                            for c_data in output.get("contacts") or []:
+                            contacts_list = output.get("contacts") or []
+                            for c_data in contacts_list:
                                 if c_data.get("name"):
                                     sess.add(Contact(
                                         customer_id=customer.id, tenant_id=tenant_id,
@@ -878,6 +941,8 @@ async def _execute_search(
                             await sess.commit()
                             async with _saved_lock:
                                 saved_count += 1
+                                if contacts_list and any(c.get("name") for c in contacts_list):
+                                    contacts_from_extraction += 1
                                 saved_customers.append((customer.id, output.get("website") or result.website))
                             await on_progress({"type": "progress", "message": "已保存: " + company_name})
                             return ("saved", customer.id, output.get("website") or result.website)
@@ -894,6 +959,7 @@ async def _execute_search(
     await on_progress({"type": "progress", "message": f"并行提取 {len(deduped[:_MAX_SEARCH_RESULTS])} 条结果（最多 5 并发）..."})
     extract_tasks = [_extract_and_save(r) for r in deduped[:_MAX_SEARCH_RESULTS]]
     await asyncio.gather(*extract_tasks, return_exceptions=True)
+    await on_progress({"type": "progress", "message": f"AI 结构化完成：保存 {saved_count} 个新客户，其中 {contacts_from_extraction} 个已提取到联系人"})
 
     # Step 4: 定向联系人搜索（并行，最多 5 并发）
     await on_progress({"type": "section", "section": "contact_search"})
@@ -1054,7 +1120,7 @@ async def _execute_search(
     result = {
         "saved_count": saved_count,
         "enriched_count": enriched_count,
-        "contact_search_count": contact_search_count,
+        "contact_search_count": contact_search_count + contacts_from_extraction,
         "total_found": len(deduped),
     }
     await on_progress({"type": "complete", **result})

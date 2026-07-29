@@ -83,7 +83,7 @@ async def _get_recent_message_ids(
         result = await session.execute(
             select(SendLog.message_id).where(
                 SendLog.message_id.isnot(None),
-                SendLog.status.in_(["sent", "delivered", "opened"]),
+                SendLog.status.in_(["sent", "delivered"]),
                 SendLog.created_at >= cutoff,
             )
         )

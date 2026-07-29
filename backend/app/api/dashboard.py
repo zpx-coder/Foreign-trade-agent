@@ -1,6 +1,6 @@
 """Dashboard 统计数据 API"""
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,49 @@ from app.models.send_log import SendLog
 from app.models.email_campaign import EmailCampaign
 
 router = APIRouter()
+
+
+# v1.6: 企业档案字段分组及完整度计算
+_ENT_FIELD_GROUPS = {
+    "basic": ["company_name", "logo_url", "industry", "website", "country", "city", "address", "description"],
+    "trade": ["year_established", "employee_count", "factory_area", "annual_export_volume",
+              "main_markets", "certifications", "oem_odm", "company_advantages"],
+    "contact": ["contact_email", "contact_phone", "contact_position"],
+    "media": ["factory_photos", "certificate_photos"],
+}
+
+
+def _is_field_filled(val) -> bool:
+    """判断字段是否有实际内容"""
+    if val is None:
+        return False
+    if isinstance(val, str) and val.strip() == "":
+        return False
+    if isinstance(val, list) and len(val) == 0:
+        return False
+    if isinstance(val, dict) and len(val) == 0:
+        return False
+    return True
+
+
+def _calc_enterprise_completion(ent) -> Tuple[float, dict]:
+    """计算企业档案完整度，返回 (总体百分比, 各区块详情)。"""
+    group_scores: dict = {}
+    total_filled = 0
+    total_fields = 0
+
+    for group_name, fields in _ENT_FIELD_GROUPS.items():
+        filled = sum(1 for f in fields if _is_field_filled(getattr(ent, f, None)))
+        group_scores[group_name] = {
+            "filled": filled,
+            "total": len(fields),
+            "rate": round(filled / len(fields), 4) if fields else 0.0,
+        }
+        total_filled += filled
+        total_fields += len(fields)
+
+    overall = round(total_filled / total_fields, 4) if total_fields > 0 else 0.0
+    return overall, group_scores
 
 
 @router.get("/stats")
@@ -59,22 +102,43 @@ async def get_dashboard_stats(
         )
     ).scalar() or 0
 
+    # v1.6: 计算企业档案完整度
+    enterprise_completion = 0.0
+    enterprise_completion_detail: dict = {}
+    if has_enterprise > 0:
+        ent_row = (
+            await db.execute(
+                select(EnterpriseProfile).where(
+                    EnterpriseProfile.tenant_id == tenant_id
+                )
+            )
+        ).scalar_one_or_none()
+        if ent_row:
+            enterprise_completion, enterprise_completion_detail = _calc_enterprise_completion(ent_row)
+
     # ── 客户统计（Phase 4） ──
     customer_base = select(func.count(Customer.id)).where(
         Customer.tenant_id == tenant_id
     )
     total_customers = (await db.execute(customer_base)).scalar() or 0
-    # 触达 = 至少有一个联系人成功发送过邮件（非 pending/failed）
-    customers_reached = (await db.execute(
+    # 触达 = 客户状态非 new（手动标记已联系/已筛选/洽谈中/已成交）或曾通过邮件成功发送
+    customers_reached_by_status = (await db.execute(
+        select(func.count(Customer.id)).where(
+            Customer.tenant_id == tenant_id,
+            Customer.status != "new",
+        )
+    )).scalar() or 0
+    customers_reached_by_email = (await db.execute(
         select(func.count(func.distinct(Contact.customer_id)))
         .select_from(SendLog)
         .join(Contact, SendLog.contact_id == Contact.id)
         .join(EmailCampaign, SendLog.campaign_id == EmailCampaign.id)
         .where(
             EmailCampaign.tenant_id == tenant_id,
-            SendLog.status.in_(["sent", "delivered", "opened", "replied"]),
+            SendLog.status.in_(["sent", "delivered", "replied"]),
         )
     )).scalar() or 0
+    customers_reached = max(customers_reached_by_status, customers_reached_by_email)
     reach_rate = (customers_reached / total_customers) if total_customers > 0 else 0.0
 
     # 客户状态分布
@@ -169,7 +233,7 @@ async def get_dashboard_stats(
             EmailCampaign, SendLog.campaign_id == EmailCampaign.id
         ).where(
             EmailCampaign.tenant_id == tenant_id,
-            SendLog.status.in_(["sent", "delivered", "opened", "replied"]),
+            SendLog.status.in_(["sent", "delivered", "replied"]),
         )
     )).scalar() or 0
 
@@ -237,6 +301,8 @@ async def get_dashboard_stats(
         "total_products": total_products,
         # 企业
         "has_enterprise_profile": has_enterprise > 0,
+        "enterprise_completion": enterprise_completion,
+        "enterprise_completion_detail": enterprise_completion_detail,
         # 客户 (Phase 4)
         "total_customers": total_customers,
         "customers_reached": customers_reached,

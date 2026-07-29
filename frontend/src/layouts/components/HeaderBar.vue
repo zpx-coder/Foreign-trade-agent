@@ -21,16 +21,6 @@
 
     <!-- 右侧：操作区 -->
     <div class="header-right">
-      <!-- 通知 -->
-      <el-badge :value="3" :max="99" class="header-notify">
-        <button class="icon-btn" title="通知">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-        </button>
-      </el-badge>
-
       <!-- 用户下拉 -->
       <el-dropdown trigger="click" placement="bottom-end">
         <div class="user-trigger">
@@ -175,17 +165,6 @@ function handleLogout() {
   &:hover {
     background: #f1f5f9;
     color: #1e293b;
-  }
-}
-
-.header-notify {
-  :deep(.el-badge__content) {
-    font-size: 10px;
-    height: 16px;
-    line-height: 16px;
-    padding: 0 4px;
-    right: 4px;
-    top: 4px;
   }
 }
 

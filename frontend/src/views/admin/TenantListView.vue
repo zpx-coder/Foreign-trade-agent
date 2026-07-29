@@ -48,6 +48,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="user_count" label="用户数" width="80" />
+        <el-table-column prop="icp_count" label="画像数" width="80" />
+        <el-table-column prop="customer_count" label="客户数" width="80" />
+        <el-table-column prop="email_sent_count" label="已发邮件" width="90" />
         <el-table-column prop="created_at" label="入驻时间" width="180">
           <template #default="{ row }">{{ fmt(row.created_at) }}</template>
         </el-table-column>
@@ -83,6 +86,9 @@ interface TenantRow {
   plan_type: string;
   status: string;
   user_count: number;
+  icp_count: number;
+  customer_count: number;
+  email_sent_count: number;
   created_at: string;
 }
 

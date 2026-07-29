@@ -54,6 +54,9 @@ ICP_USER_PROMPT_TEMPLATE = """请根据以下信息生成理想客户画像：
 ## 产品/服务信息
 {products_section}
 
+## 我方企业实力（自动从企业资料获取，用于生成精准的 competitive_advantages 和 recommended_approach）
+{enterprise_section}
+
 ## 采购商核心特征
 - 买家类型：{buyer_type}
 - 单批次采购预算：{customer_budget}
@@ -75,6 +78,79 @@ def _fmt_list_or_str(value) -> str:
     if isinstance(value, str) and value.strip():
         return value
     return "未指定"
+
+
+def _build_enterprise_section(input_data: dict) -> str:
+    """从 input_data 中提取企业资料字段，构建企业实力描述文本。
+
+    API 层负责从 EnterpriseProfile 读取数据并以 _ent_ 前缀键
+    注入到 input_data 中，此处只做格式化。
+    """
+    lines: list[str] = []
+
+    def _get(key: str):
+        val = input_data.get(f"_ent_{key}")
+        if val is None or val == "":
+            return None
+        if isinstance(val, list):
+            return val if len(val) > 0 else None
+        if isinstance(val, str) and val.strip() == "":
+            return None
+        return val
+
+    # 基本信息
+    industry = _get("industry")
+    if industry:
+        lines.append(f"- 所属行业：{industry}")
+
+    description = _get("description")
+    if description:
+        lines.append(f"- 企业简介：{description}")
+
+    # 规模信息
+    year = _get("year_established")
+    employees = _get("employee_count")
+    factory = _get("factory_area")
+    export_vol = _get("annual_export_volume")
+
+    scale_parts = []
+    if year:
+        scale_parts.append(f"成立 {year} 年")
+    if employees:
+        scale_parts.append(f"{employees} 人")
+    if factory:
+        scale_parts.append(f"工厂面积 {factory}")
+    if export_vol:
+        scale_parts.append(f"年出口额 {export_vol}")
+    if scale_parts:
+        lines.append(f"- 企业规模：{'，'.join(scale_parts)}")
+
+    # 市场与能力
+    markets = _get("main_markets")
+    if markets:
+        lines.append(f"- 主要出口市场：{'、'.join(markets) if isinstance(markets, list) else markets}")
+
+    certs = _get("certifications")
+    if certs:
+        certs_str = "、".join(certs) if isinstance(certs, list) else certs
+        lines.append(f"- 认证资质：{certs_str}")
+
+    oem = _get("oem_odm")
+    if oem:
+        lines.append(f"- OEM/ODM 能力：{oem}")
+
+    advantages = _get("company_advantages")
+    if advantages:
+        lines.append(f"- 企业核心优势：{advantages}")
+
+    website = _get("website")
+    if website:
+        lines.append(f"- 企业官网：{website}")
+
+    if not lines:
+        return "（企业资料未完善，请基于产品和市场信息推断我方优势）"
+
+    return "\n".join(lines)
 
 
 class IcpGenerator:
@@ -158,11 +234,15 @@ class IcpGenerator:
         else:
             customer_budget = input_data.get("customer_budget", "未指定") or "未指定"
 
+        # ── 企业实力（v1.6：从企业资料自动注入）──
+        enterprise_section = _build_enterprise_section(input_data)
+
         data = {
             "target_industry": input_data.get("target_industry") or "未指定",
             "target_region": input_data.get("target_region") or "未指定",
             "company_size": company_size,
             "products_section": products_section,
+            "enterprise_section": enterprise_section,
             "customer_budget": customer_budget,
             # v1.3 采购商核心特征
             "buyer_type": input_data.get("buyer_type") or "未指定",

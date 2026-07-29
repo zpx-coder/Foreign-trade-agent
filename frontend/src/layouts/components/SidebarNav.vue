@@ -138,6 +138,7 @@ const appNavItems: NavItem[] = [
       { path: "/app/email/campaigns", title: "发送任务" },
     ],
   },
+  { path: "/app/analytics", title: "数据统计", icon: "TrendCharts" },
   { path: "/app/enterprise", title: "企业资料", icon: "OfficeBuilding" },
   { path: "/app/settings", title: "系统设置", icon: "Setting" },
 ];

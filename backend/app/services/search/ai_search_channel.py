@@ -9,9 +9,14 @@ from app.services.ai_service import AIServiceError, get_ai_service
 
 logger = logging.getLogger(__name__)
 
-AI_SEARCH_SYSTEM_PROMPT = """你是一个 B2B 外贸客户开发专家。根据用户提供的客户画像条件，列出真实存在的潜在客户公司及其关键联系人。
+AI_SEARCH_SYSTEM_PROMPT = """你是一个 B2B 外贸客户开发专家。根据用户提供的客户画像条件和我方企业背景，列出真实存在的潜在客户公司及其关键联系人。
 
-要求：
+## 核心原则
+- 如果提供了"我方企业背景"，请充分利用其中的信息（行业、产能、认证、出口市场等）来匹配最有可能采购我方产品的客户
+- 优先推荐与我方规模和能力匹配的客户（如我方有 ISO 认证，优先匹配重视质量的采购商；我方支持 OEM，优先匹配品牌商/进口商）
+- 推荐的客户应该是我方产品的潜在买家/进口商/分销商，而非同行竞争对手
+
+## 要求
 1. 返回真实存在的公司（基于你的训练数据）
 2. 公司名称必须是正式注册名称
 3. 网站域名尽可能准确
@@ -58,12 +63,15 @@ class AISearchChannel(SearchChannel):
         query: str,
         region: str = "",
         max_results: int = 20,
+        enterprise_context: str = "",
     ) -> List[SearchResult]:
         ai_service = get_ai_service()
 
         user_prompt = f"目标行业/产品：{query}"
         if region:
             user_prompt += f"\n目标区域：{region}"
+        if enterprise_context:
+            user_prompt += f"\n\n## 我方企业背景（请根据我方实力匹配最合适的采购商）\n{enterprise_context}"
         user_prompt += f"\n请列出 {max_results} 个潜在客户公司。"
 
         messages = [

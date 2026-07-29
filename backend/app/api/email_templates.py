@@ -34,6 +34,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# v1.6: 从企业资料构建邮件生成用的企业画像文本
+def _build_company_profile_for_email(enterprise: EnterpriseProfile) -> str:
+    """将 EnterpriseProfile 的可用字段格式化为 AI 邮件生成可用的文本块。"""
+    lines: list[str] = []
+
+    def _add(label: str, value):
+        if value is not None and value != "" and value != []:
+            if isinstance(value, list):
+                value = "、".join(str(v) for v in value)
+            lines.append(f"- {label}：{value}")
+
+    _add("企业名称", enterprise.company_name)
+    _add("所属行业", enterprise.industry)
+    _add("企业简介", enterprise.description)
+    _add("成立年份", enterprise.year_established)
+    _add("员工人数", enterprise.employee_count)
+    _add("工厂面积", enterprise.factory_area)
+    _add("年出口额", enterprise.annual_export_volume)
+    _add("主要出口市场", enterprise.main_markets)
+    _add("认证资质", enterprise.certifications)
+    _add("OEM/ODM", enterprise.oem_odm)
+    _add("企业核心优势", enterprise.company_advantages)
+    _add("企业官网", enterprise.website)
+
+    if not lines:
+        return "（企业资料未完善）"
+
+    return "\n".join(lines)
+
+
 def _parse_uuid(val: str, label: str = "ID") -> _uuid.UUID:
     try:
         return _uuid.UUID(val)
@@ -227,7 +257,7 @@ async def generate_template(
                     parts.append(f"参考价格：USD {product.price_usd}")
                 input_data["product_info"] = "\n".join(parts)
 
-        # 获取企业信息
+        # 获取企业信息（v1.6：注入完整企业画像，供 AI 生成更具说服力的邮件）
         ent_result = await db.execute(
             select(EnterpriseProfile).where(
                 EnterpriseProfile.tenant_id == current_user.tenant_id
@@ -236,6 +266,7 @@ async def generate_template(
         enterprise = ent_result.scalar_one_or_none()
         if enterprise:
             input_data.setdefault("company_name", enterprise.company_name)
+            input_data.setdefault("company_profile", _build_company_profile_for_email(enterprise))
 
         yield f"data: {json.dumps({'type': 'progress', 'message': 'AI 正在生成邮件模板...'}, ensure_ascii=False)}\n\n"
 

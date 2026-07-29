@@ -43,6 +43,11 @@ const appRoutes: RouteRecordRaw = {
       component: () => import("@/views/dashboard/DashboardView.vue"),
     },
     {
+      path: "analytics",
+      name: "Analytics",
+      component: () => import("@/views/analytics/AnalyticsView.vue"),
+    },
+    {
       path: "enterprise",
       name: "Enterprise",
       component: () => import("@/views/enterprise/EnterpriseEdit.vue"),

@@ -14,6 +14,7 @@ from app.database import get_db, get_session
 from app.core.auth import get_current_user
 from app.models.user import User
 from app.models.icp import Icp
+from app.models.enterprise import EnterpriseProfile
 from app.schemas.icp import (
     IcpCreateRequest,
     IcpUpdateRequest,
@@ -28,6 +29,27 @@ router = APIRouter()
 
 # 清理超过此时间的 stuck generating 记录
 _GENERATING_TIMEOUT_MINUTES = 15
+
+# v1.6: 企业资料字段映射 — 将 EnterpriseProfile 字段注入 ICP 生成 input_data
+_ENT_FIELDS_FOR_ICP = [
+    "industry", "description", "year_established", "employee_count",
+    "factory_area", "annual_export_volume", "main_markets", "certifications",
+    "oem_odm", "company_advantages", "website",
+]
+
+
+def _inject_enterprise_to_input(input_data: dict, enterprise: EnterpriseProfile) -> None:
+    """将企业资料中以 _ent_ 为前缀的字段注入到 ICP 生成 input_data 中。
+
+    已存在的键不会被覆盖（用户手动填写的值优先）。
+    """
+    for field in _ENT_FIELDS_FOR_ICP:
+        key = f"_ent_{field}"
+        if key in input_data:
+            continue  # 不覆盖已有值
+        val = getattr(enterprise, field, None)
+        if val is not None and val != "" and val != []:
+            input_data[key] = val
 
 
 def _parse_uuid(val: str, label: str = "ID") -> _uuid.UUID:
@@ -251,7 +273,18 @@ async def generate_icp(
             ai_service = get_ai_service()
             generator = IcpGenerator(ai_service)
 
-            async for chunk in generator.generate(icp.input_data):
+            # v1.6: 从企业资料注入企业实力数据
+            input_data = dict(icp.input_data) if icp.input_data else {}
+            ent_result = await db.execute(
+                select(EnterpriseProfile).where(
+                    EnterpriseProfile.tenant_id == current_user.tenant_id
+                )
+            )
+            enterprise = ent_result.scalar_one_or_none()
+            if enterprise:
+                _inject_enterprise_to_input(input_data, enterprise)
+
+            async for chunk in generator.generate(input_data):
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
             # 生成完成 — 用独立 session 写库（get_session 自动 commit）
