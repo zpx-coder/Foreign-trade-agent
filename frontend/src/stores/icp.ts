@@ -8,8 +8,6 @@ export interface IcpInputData {
   company_size?: string | string[];  // v1.3: 支持多选
   // v1.3: 产品关联
   product_ids?: string[];
-  product_price_min?: number;
-  product_price_max?: number;
   // 旧字段（保留兼容）
   product_category?: string;
   product_price_range?: string;
@@ -20,8 +18,6 @@ export interface IcpInputData {
   customer_budget?: string;  // 旧字段
   // v1.3: 采购商核心特征
   buyer_type?: string;
-  procurement_frequency?: string;
-  sourcing_channels?: string[];
   key_decision_factors?: string[];
   pain_points?: string;
   decision_makers?: string;

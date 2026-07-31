@@ -47,10 +47,7 @@
             <el-descriptions-item label="目标地区">{{ inputData.target_region || "—" }}</el-descriptions-item>
             <el-descriptions-item label="公司规模">{{ formatCompanySize(inputData.company_size) }}</el-descriptions-item>
             <el-descriptions-item label="买家类型">{{ inputData.buyer_type || "—" }}</el-descriptions-item>
-            <el-descriptions-item label="采购频次">{{ inputData.procurement_frequency || "—" }}</el-descriptions-item>
-            <el-descriptions-item label="客户目标采购单价">{{ formatPriceRange(inputData.product_price_min, inputData.product_price_max) }}</el-descriptions-item>
             <el-descriptions-item label="客户单批次采购预算">{{ formatPriceRange(inputData.customer_budget_min, inputData.customer_budget_max) }}</el-descriptions-item>
-            <el-descriptions-item label="主要采购渠道">{{ formatCompanySize(inputData.sourcing_channels) }}</el-descriptions-item>
             <el-descriptions-item label="关键决策因素">{{ formatCompanySize(inputData.key_decision_factors) }}</el-descriptions-item>
             <el-descriptions-item label="决策者角色">{{ inputData.decision_makers || "—" }}</el-descriptions-item>
             <el-descriptions-item label="客户痛点">{{ inputData.pain_points || "—" }}</el-descriptions-item>
@@ -99,25 +96,7 @@
                   </el-select>
                 </el-form-item>
               </el-col>
-              <el-col :span="12">
-                <el-form-item label="采购频次">
-                  <el-select v-model="editForm.procurement_frequency" placeholder="请选择" style="width: 100%" clearable>
-                    <el-option label="高频（每月）" value="高频（每月）" />
-                    <el-option label="中等（每季度）" value="中等（每季度）" />
-                    <el-option label="低频（半年至一年）" value="低频（半年至一年）" />
-                    <el-option label="不稳定/按需" value="不稳定/按需" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
             </el-row>
-            <el-form-item label="客户目标采购单价 (USD)">
-              <div class="price-range-row">
-                <el-input-number v-model="editForm.product_price_min" :precision="2" :min="0" :controls="false" placeholder="最低" style="width: 120px" />
-                <span class="price-sep">—</span>
-                <el-input-number v-model="editForm.product_price_max" :precision="2" :min="0" :controls="false" placeholder="最高" style="width: 120px" />
-                <span class="price-unit">USD</span>
-              </div>
-            </el-form-item>
             <el-form-item label="客户单批次采购预算 (USD)">
               <div class="price-range-row">
                 <el-input-number v-model="editForm.customer_budget_min" :precision="0" :min="0" :controls="false" placeholder="最低" style="width: 120px" />
@@ -127,18 +106,6 @@
               </div>
             </el-form-item>
             <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item label="主要采购渠道">
-                  <el-select v-model="editForm.sourcing_channels" multiple placeholder="可多选" style="width: 100%">
-                    <el-option label="B2B平台" value="B2B平台" />
-                    <el-option label="行业展会" value="行业展会" />
-                    <el-option label="同行推荐" value="同行推荐" />
-                    <el-option label="搜索引擎" value="搜索引擎" />
-                    <el-option label="社交媒体" value="社交媒体" />
-                    <el-option label="海关数据" value="海关数据" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
               <el-col :span="12">
                 <el-form-item label="关键决策因素">
                   <el-select v-model="editForm.key_decision_factors" multiple placeholder="可多选" style="width: 100%">
@@ -269,13 +236,9 @@ const editForm = reactive<Record<string, unknown>>({
   target_industry: "",
   target_region: "",
   company_size: [] as string[],
-  product_price_min: undefined as number | undefined,
-  product_price_max: undefined as number | undefined,
   customer_budget_min: undefined as number | undefined,
   customer_budget_max: undefined as number | undefined,
   buyer_type: "",
-  procurement_frequency: "",
-  sourcing_channels: [] as string[],
   key_decision_factors: [] as string[],
   product_features: "",
   pain_points: "",
@@ -311,13 +274,9 @@ function startEditing() {
     target_industry: data.target_industry || "",
     target_region: data.target_region || "",
     company_size: companySize,
-    product_price_min: data.product_price_min ?? undefined,
-    product_price_max: data.product_price_max ?? undefined,
     customer_budget_min: data.customer_budget_min ?? undefined,
     customer_budget_max: data.customer_budget_max ?? undefined,
     buyer_type: data.buyer_type || "",
-    procurement_frequency: data.procurement_frequency || "",
-    sourcing_channels: Array.isArray(data.sourcing_channels) ? [...data.sourcing_channels] : [],
     key_decision_factors: Array.isArray(data.key_decision_factors) ? [...data.key_decision_factors] : [],
     product_features: data.product_features || "",
     pain_points: data.pain_points || "",
@@ -395,13 +354,9 @@ async function handleSaveAndRegenerate() {
       target_industry: editForm.target_industry || null,
       target_region: editForm.target_region || null,
       company_size: (editForm.company_size as string[]).length > 0 ? editForm.company_size : null,
-      product_price_min: editForm.product_price_min ?? null,
-      product_price_max: editForm.product_price_max ?? null,
       customer_budget_min: editForm.customer_budget_min ?? null,
       customer_budget_max: editForm.customer_budget_max ?? null,
       buyer_type: editForm.buyer_type || null,
-      procurement_frequency: editForm.procurement_frequency || null,
-      sourcing_channels: (editForm.sourcing_channels as string[]).length > 0 ? editForm.sourcing_channels : null,
       key_decision_factors: (editForm.key_decision_factors as string[]).length > 0 ? editForm.key_decision_factors : null,
       product_features: editForm.product_features || null,
       pain_points: editForm.pain_points || null,

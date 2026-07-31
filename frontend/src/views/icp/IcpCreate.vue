@@ -127,7 +127,7 @@
           </template>
         </template>
 
-        <!-- Step 2: 采购商特征（v1.3：外贸采购商核心特征） -->
+        <!-- Step 2: 采购商特征 -->
         <template v-if="step === 2">
           <el-row :gutter="24">
             <el-col :span="12">
@@ -143,18 +143,6 @@
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="采购频次">
-                <el-select v-model="form.procurement_frequency" placeholder="请选择采购频次" style="width: 100%" clearable>
-                  <el-option label="高频（每月均有采购）" value="高频（每月）" />
-                  <el-option label="中等（每季度采购）" value="中等（每季度）" />
-                  <el-option label="低频（半年至一年一次）" value="低频（半年至一年）" />
-                  <el-option label="不稳定/按需采购" value="不稳定/按需" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="24">
-            <el-col :span="12">
               <el-form-item label="客户单批次采购预算 (USD)">
                 <div class="price-range-row">
                   <el-input-number v-model="form.customer_budget_min" :precision="0" :min="0" :controls="false" placeholder="最低预算" style="width: 130px" />
@@ -164,30 +152,8 @@
                 </div>
               </el-form-item>
             </el-col>
-            <el-col :span="12">
-              <el-form-item label="客户目标采购单价 (USD)">
-                <div class="price-range-row">
-                  <el-input-number v-model="form.product_price_min" :precision="2" :min="0" :controls="false" placeholder="最低单价" style="width: 130px" />
-                  <span class="price-sep">—</span>
-                  <el-input-number v-model="form.product_price_max" :precision="2" :min="0" :controls="false" placeholder="最高单价" style="width: 130px" />
-                  <span class="price-unit">USD</span>
-                </div>
-              </el-form-item>
-            </el-col>
           </el-row>
           <el-row :gutter="24">
-            <el-col :span="12">
-              <el-form-item label="主要采购渠道">
-                <el-select v-model="form.sourcing_channels" multiple placeholder="可多选" style="width: 100%">
-                  <el-option label="B2B平台（阿里巴巴/环球资源等）" value="B2B平台" />
-                  <el-option label="行业展会/广交会等" value="行业展会" />
-                  <el-option label="同行推荐/口碑介绍" value="同行推荐" />
-                  <el-option label="搜索引擎/独立站搜索" value="搜索引擎" />
-                  <el-option label="社交媒体（LinkedIn等）" value="社交媒体" />
-                  <el-option label="海关数据直投" value="海关数据" />
-                </el-select>
-              </el-form-item>
-            </el-col>
             <el-col :span="12">
               <el-form-item label="关键决策因素">
                 <el-select v-model="form.key_decision_factors" multiple placeholder="可多选" style="width: 100%">
@@ -201,8 +167,6 @@
                 </el-select>
               </el-form-item>
             </el-col>
-          </el-row>
-          <el-row :gutter="24">
             <el-col :span="12">
               <el-form-item label="决策者角色">
                 <el-input v-model="form.decision_makers" placeholder="如：采购经理、产品总监、CEO" />
@@ -302,13 +266,9 @@ const form = reactive<Record<string, unknown>>({
   product_ids: [] as string[],
   product_source: "linked",
   manual_products: [] as ManualProduct[],
-  product_price_min: undefined as number | undefined,
-  product_price_max: undefined as number | undefined,
   customer_budget_min: undefined as number | undefined,
   customer_budget_max: undefined as number | undefined,
   buyer_type: "",
-  procurement_frequency: "",
-  sourcing_channels: [] as string[],
   key_decision_factors: [] as string[],
   pain_points: "",
   decision_makers: "",
@@ -345,13 +305,9 @@ function buildInputData(): Record<string, unknown> {
     target_region: form.target_region || null,
     company_size: (form.company_size as string[]).length > 0 ? form.company_size : null,
     product_ids: (form.product_ids as string[]).length > 0 ? form.product_ids : null,
-    product_price_min: form.product_price_min ?? null,
-    product_price_max: form.product_price_max ?? null,
     customer_budget_min: form.customer_budget_min ?? null,
     customer_budget_max: form.customer_budget_max ?? null,
     buyer_type: form.buyer_type || null,
-    procurement_frequency: form.procurement_frequency || null,
-    sourcing_channels: (form.sourcing_channels as string[]).length > 0 ? form.sourcing_channels : null,
     key_decision_factors: (form.key_decision_factors as string[]).length > 0 ? form.key_decision_factors : null,
     pain_points: form.pain_points || null,
     decision_makers: form.decision_makers || null,

@@ -759,13 +759,19 @@ async def _execute_search(
             await on_progress({"type": "progress", "channel": channel_name, "error": str(e), "message": f"{channel_name} 搜索失败: {e}"})
             return channel_name, [], str(e)
 
+    # 保存用户原始选择的渠道（后续 AI 精筛判断用）
+    original_channels = list(channels)
+
     # LinkedIn 渠道合二为一：搜公司的同时自动搜人物
     if "linkedin" in channels and "linkedin_people" not in channels:
         channels = channels + ["linkedin_people"]
 
+    # v1.7: AI 渠道不再参与并行搜索——改为聚合后对全部结果做精筛补全
+    non_ai_channels = [c for c in channels if c != "ai"]
+
     channel_tasks = [
         _search_channel(name, cls)
-        for name in channels
+        for name in non_ai_channels
         if (cls := _CHANNELS_MAP.get(name))
     ]
     if channel_tasks:
@@ -777,7 +783,39 @@ async def _execute_search(
     await on_progress({"type": "section", "section": "deduping"})
     aggregator = SearchAggregator()
     deduped = aggregator.aggregate(all_results)
-    await on_progress({"type": "progress", "message": f"去重后 {len(deduped)} 条，开始 AI 结构化..."})
+    await on_progress({"type": "progress", "message": f"去重后 {len(deduped)} 条"})
+
+    # Step 2.5: AI 二次筛选补全（v1.7）
+    if "ai" in original_channels:
+        await on_progress({"type": "section", "section": "curating"})
+        ai_channel = AISearchChannel()
+        if deduped:
+            await on_progress({"type": "progress", "message": f"AI 正在对 {len(deduped)} 条结果进行精筛补全..."})
+            deduped = await ai_channel.curate_results(
+                results=deduped,
+                icp_data=icp_data,
+                query=query,
+                region=region,
+                enterprise_context=enterprise_context,
+                max_results=_MAX_SEARCH_RESULTS,
+            )
+        else:
+            # Fallback: 非 AI 渠道无结果时，AI 独立生成（保留原行为）
+            await on_progress({"type": "progress", "message": "非 AI 渠道无结果，AI 独立生成..."})
+            kwargs = {}
+            if enterprise_context:
+                kwargs["enterprise_context"] = enterprise_context
+            deduped = await ai_channel.search(query, region, _MAX_SEARCH_RESULTS, **kwargs)
+        await on_progress({"type": "progress", "message": f"AI 精筛完成：{len(deduped)} 条结果"})
+
+        # v1.8: Post-curation 过滤 — 清除漏网的非公司结果（文章标题、名录页面等）
+        from app.services.search.base import is_clearly_not_company
+        before_filter = len(deduped)
+        deduped = [r for r in deduped if not is_clearly_not_company(r.company_name, r.website)]
+        if before_filter > len(deduped):
+            await on_progress({"type": "progress", "message": f"Post-curation 过滤：{before_filter - len(deduped)} 条非公司结果已剔除"})
+
+    await on_progress({"type": "progress", "message": f"开始 AI 结构化提取..."})
 
     # Step 3: AI 结构化并写入 DB（并行，最多 5 个并发提取）
     await on_progress({"type": "section", "section": "saving"})

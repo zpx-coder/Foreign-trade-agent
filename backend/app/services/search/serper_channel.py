@@ -11,29 +11,14 @@ from urllib.parse import urlparse
 import httpx
 
 from app.config import settings
-from app.services.search.base import SearchChannel, SearchResult
+from app.services.search.base import (
+    SearchChannel, SearchResult,
+    is_non_company_url, looks_like_article_title,
+)
 
 logger = logging.getLogger(__name__)
 
 _SERPER_BASE = "https://google.serper.dev"
-
-# 非公司网站域名黑名单：命中任一关键词则丢弃该结果
-_NON_COMPANY_DOMAIN_KEYWORDS = [
-    "zhihu.com", "medium.com", "blog.", "blogs.",
-    "wikipedia.org", "baike.baidu.com", "wiki.",
-    "news.", "forbes.com", "36kr.com", "sohu.com",
-    "ifeng.com", "163.com", "qq.com", "sina.com.cn",
-    "bbc.com", "cnn.com", "reuters.com", "bloomberg.com",
-    "finance.yahoo.com", "marketwatch.com",
-    "quora.com", "reddit.com", "stackexchange.com",
-    "stackoverflow.com", "zhidao.baidu.com",
-    "youtube.com", "youtu.be", "bilibili.com",
-    "facebook.com", "twitter.com", "instagram.com",
-    "tiktok.com", "weibo.com",
-    "linkedin.com/jobs", "indeed.com", "glassdoor.com",
-    "zhaopin.com", "51job.com",
-    "amazon.com", "ebay.com", "alibaba.com/products",
-]
 
 
 class SerperSearchChannel(SearchChannel):
@@ -99,7 +84,9 @@ class SerperSearchChannel(SearchChannel):
                     for item in organic:
                         parsed = self._parse_result(item)
                         if parsed and parsed.company_name:
-                            if self._is_non_company_url(parsed.website):
+                            if is_non_company_url(parsed.website):
+                                continue
+                            if looks_like_article_title(parsed.company_name):
                                 continue
                             results.append(parsed)
 
@@ -202,13 +189,3 @@ class SerperSearchChannel(SearchChannel):
         }
         return mapping.get(region_lower, region_lower[:2])
 
-    @staticmethod
-    def _is_non_company_url(url: Optional[str]) -> bool:
-        """检查 URL 是否命中非公司网站黑名单"""
-        if not url:
-            return False
-        url_lower = url.lower()
-        for keyword in _NON_COMPANY_DOMAIN_KEYWORDS:
-            if keyword in url_lower:
-                return True
-        return False
